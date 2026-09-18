@@ -1,0 +1,55 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+/* Copyright (c) 2026 Rajat Srivastava. Source-available - see /LICENSE. Commercial use requires permission: rajat242003@gmail.com. */
+:root{
+  --bg:#0f172a; --bg2:#1e293b; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+  --green:#16a34a; --amber:#d97706; --red:#dc2626; --blue:#2563eb;
+  --line:#e2e8f0; --soft:#f8fafc; --accent:#22c55e;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f1f5f9;color:var(--ink)}
+.topbar{background:var(--bg);color:#fff;padding:20px 16px 16px;text-align:center}
+.topbar-inner{max-width:960px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+.brand{color:#fff;font-weight:800;font-size:20px;text-decoration:none}
+#search{flex:1 1 240px;max-width:420px;padding:10px 14px;border-radius:99px;border:1px solid #334155;background:#fff;font-size:15px}
+.topbar .sub{opacity:.85;margin:10px 0 0;font-size:14px}
+main{max-width:960px;margin:0 auto;padding:16px 14px 40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:14px}
+.tool-grid a.card{margin-top:0;text-decoration:none;color:inherit;display:block}
+.tool-grid a.card:hover{border-color:var(--blue);box-shadow:0 4px 16px rgba(37,99,235,.12)}
+.tool-grid h3{margin:0 0 6px;font-size:16px}
+.tool-grid p{margin:0;color:var(--muted);font-size:13px}
+.cat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--blue)}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:13px;font-weight:700;color:#fff}
+.green{background:var(--green)}.amber{background:var(--amber)}.red{background:var(--red)}.blue{background:var(--blue)}.grey{background:var(--muted)}
+.dropzone{border:2px dashed #94a3b8;border-radius:14px;background:var(--soft);padding:28px 18px;text-align:center;cursor:pointer;outline-offset:3px;transition:border-color .15s,background .15s}
+.dropzone:hover,.dropzone.drag{border-color:var(--blue);background:#eff6ff}
+.dropzone.drag{border-style:solid}
+.dropzone .dz-title{font-weight:700;margin-bottom:4px}
+.dropzone .dz-sub{color:var(--muted);font-size:13px}
+.filelist{margin:12px 0 0;padding:0;list-style:none;font-size:14px}
+.filelist li{padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:#fff;display:flex;justify-content:space-between;gap:10px}
+.filelist .rej{border-color:#fecaca;background:#fef2f2}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:12px}
+.progress > div{height:100%;width:0;background:var(--blue);transition:width .2s}
+.btnrow{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+button,.btn{background:var(--ink);color:#fff;border:0;padding:11px 18px;border-radius:10px;font-size:15px;cursor:pointer;text-decoration:none;display:inline-block}
+button.secondary,.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button:hover,.btn:hover{opacity:.92}
+button:disabled{opacity:.5;cursor:default}
+.muted{color:var(--muted)}
+.kv{display:grid;grid-template-columns:180px 1fr;gap:6px 10px;margin:12px 0;font-size:14px}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+.notice{border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}
+.warnbox{border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}
+footer{text-align:center;color:var(--muted);font-size:13px;padding:24px 14px}
+footer a{color:var(--blue)}
+.noscript{text-align:center;padding:20px;font-weight:700}
+.empty{color:var(--muted);text-align:center;padding:24px}
+.crumb{font-size:13px;margin-bottom:8px;display:inline-block}
+@media (max-width:600px){
+  .kv{grid-template-columns:1fr}
+  main{padding:12px 10px 32px}
+  #search{flex-basis:100%}
+}
+@media print{.topbar .topbar-inner,#search,.btnrow{display:none}}

@@ -1,0 +1,124 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "orchestrator",
+  "permission": {
+    "edit": "allow",
+    "bash": "allow",
+    "task": "allow"
+  },
+  "agent": {
+    "orchestrator": {
+      "permission": {
+        "skill": {
+          "*": "allow"
+        }
+      }
+    },
+    "planner": {
+      "permission": {
+        "skill": {
+          "grill-with-docs": "allow",
+          "grilling": "allow",
+          "domain-modeling": "allow",
+          "research": "allow",
+          "to-spec": "allow",
+          "to-tickets": "allow",
+          "wayfinder": "allow",
+          "ask-matt": "allow"
+        }
+      }
+    },
+    "explorer": {
+      "permission": {
+        "skill": {
+          "wayfinder": "allow",
+          "ask-matt": "allow"
+        }
+      }
+    },
+    "researcher": {
+      "permission": {
+        "skill": {
+          "research": "allow",
+          "ask-matt": "allow"
+        }
+      }
+    },
+    "builder": {
+      "permission": {
+        "skill": {
+          "implement": "allow",
+          "tdd": "allow",
+          "codebase-design": "allow",
+          "domain-modeling": "allow"
+        }
+      }
+    },
+    "tester": {
+      "permission": {
+        "skill": {
+          "diagnosing-bugs": "allow",
+          "tdd": "allow"
+        }
+      }
+    },
+    "reviewer": {
+      "permission": {
+        "skill": {
+          "code-review": "allow"
+        }
+      }
+    },
+    "security-auditor": {
+      "permission": {
+        "skill": {
+          "code-review": "allow",
+          "research": "allow"
+        }
+      }
+    },
+    "evaluator": {
+      "permission": {
+        "skill": {
+          "triage": "allow",
+          "improve-codebase-architecture": "allow",
+          "handoff": "allow"
+        }
+      }
+    },
+    "docs-writer": {
+      "permission": {
+        "skill": {
+          "grill-with-docs": "allow"
+        }
+      }
+    },
+    "product-manager": {
+      "permission": {
+        "skill": {
+          "grill-with-docs": "allow",
+          "ask-matt": "allow",
+          "to-spec": "allow"
+        }
+      }
+    },
+    "domain-expert": {
+      "permission": {
+        "skill": {
+          "domain-modeling": "allow",
+          "research": "allow",
+          "wayfinder": "allow",
+          "ask-matt": "allow"
+        }
+      }
+    },
+    "tie-breaker": {
+      "permission": {
+        "skill": {
+          "to-spec": "allow",
+          "handoff": "allow"
+        }
+      }
+    }
+  }
+}
