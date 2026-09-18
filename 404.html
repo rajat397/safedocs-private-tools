@@ -1,0 +1,36 @@
+<!-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 -->
+<!-- Copyright (c) 2026 Rajat Srivastava. Source-available - see /LICENSE. Commercial use requires permission: rajat242003@gmail.com. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Private Toolbox — files never leave your device</title>
+<meta name="description" content="Privacy-first file toolbox: PDFs, images, media. 100% on-device, works offline. No uploads, no signup.">
+<meta name="theme-color" content="#0f172a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com blob:; worker-src 'self' blob: https://cdnjs.cloudflare.com; connect-src 'self' https://esm.sh https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com blob: data:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/">🔒 Private Toolbox</a>
+    <input id="search" type="search" placeholder="Search tools… (merge, exif, gif, zip)" aria-label="Search tools" autocomplete="off">
+    <span class="pill green" title="Every tool runs locally in your browser. No file bytes are ever sent over the network.">100% on-device</span>
+  </div>
+  <p class="sub">PDFs, images &amp; media — processed locally in your browser. No uploads. Works in airplane mode.</p>
+</header>
+
+<main id="view" aria-live="polite"></main>
+
+<footer>
+  <p><a href="#/">All tools</a> · <a href="PRIVACY.md">Privacy proof</a> · <a href="LIMITS.md">Limits</a></p>
+  <p class="muted">Static site · no backend · <span id="sw-status">offline support: checking…</span></p>
+</footer>
+
+<noscript><p class="noscript">This toolbox needs JavaScript — but only for local processing. Your files still never leave the device.</p></noscript>
+<script type="module" src="app.js"></script>
+</body>
+</html>
