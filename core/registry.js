@@ -42,6 +42,7 @@ export const TOOLS = [
   { id: 'pdf-extract-images', name: 'Extract images', desc: 'Save embedded JPEG images from a PDF, no re-encode.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['extract', 'images', 'pictures', 'photos', 'jpeg', 'jpg', 'embedded'], synonyms: ['extract images', 'get pictures out', 'save images'] },
   { id: 'pdf-remove-annotations', name: 'Remove annotations', desc: 'Strip comments, links & markup; keeps page text.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['annotations', 'comments', 'markup', 'links', 'notes', 'highlight', 'strip'], synonyms: ['remove comments', 'strip annotations', 'delete markup'] },
   { id: 'pdf-n-up', name: 'N-up PDF', desc: 'Combine 2 or 4 pages per sheet for printing.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['n-up', 'nup', '2-up', '4-up', 'impose', 'imposition', 'booklet', 'sheet', 'print'], synonyms: ['2 up', '4 up', 'pages per sheet', 'impose pdf'] },
+  { id: 'pdf-compare', name: 'Compare PDFs', desc: 'Side-by-side page comparison of two PDFs.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['compare', 'diff', 'side-by-side', 'pages', 'visual'], synonyms: ['pdf diff', 'compare pdfs', 'side by side'] },
 ];
 
 const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
@@ -96,6 +97,7 @@ const MODULES = {
   'pdf-extract-images': './tools/pdf/extract-images.js',
   'pdf-remove-annotations': './tools/pdf/remove-annotations.js',
   'pdf-n-up': './tools/pdf/n-up.js',
+  'pdf-compare': './tools/compare/index.js',
 };
 
 /** Exact module URL for one tool (accepts id string or tool object). */

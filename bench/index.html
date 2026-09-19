@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bench Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background: #fafafa; color: #1a1a1a; line-height: 1.5; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; margin-bottom: 1rem; }
+    .controls { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .controls label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+    .controls input[type="text"] { padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; min-width: 200px; }
+    .controls select { padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
+    .controls button { padding: 0.5rem 1rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .controls button:hover { background: #0052a3; }
+    .controls button:disabled { background: #ccc; cursor: not-allowed; }
+    .status { font-size: 0.85rem; color: #666; margin-left: auto; }
+    .table-wrap { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eee; white-space: nowrap; }
+    th { background: #f5f5f5; font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; }
+    th:hover { background: #eee; }
+    th.sorted-asc::after { content: " ▲"; }
+    th.sorted-desc::after { content: " ▼"; }
+    tr:hover td { background: #fafafa; }
+    .success { color: #2e7d32; }
+    .fail { color: #c62828; }
+    .spark-cell { width: 120px; min-width: 120px; }
+    canvas.sparkline { display: block; width: 100%; height: 30px; }
+    .empty { text-align: center; padding: 3rem; color: #999; }
+    .meta { font-size: 0.8rem; color: #888; margin-top: 1rem; }
+    @media (max-width: 768px) { .controls { flex-direction: column; align-items: stretch; } .status { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bench Dashboard</h1>
+    <div class="controls">
+      <label>Filter tool: <input type="text" id="filter" placeholder="e.g. pdf-merge" aria-label="Filter by tool name"></label>
+      <label>Sort: <select id="sort-col"><option value="tool">Tool</option><option value="wallMs">Wall ms</option><option value="cpuMs">CPU ms</option><option value="heapPeakMB">Heap MB</option><option value="outputBytes">Output B</option><option value="success">Success</option></select></label>
+      <label><input type="checkbox" id="sort-desc"> Descending</label>
+      <button id="reload" type="button">Reload results</button>
+      <span class="status" id="status">Loading…</span>
+    </div>
+    <div class="table-wrap">
+      <table id="results-table">
+        <thead>
+          <tr>
+            <th data-col="tool">Tool</th>
+            <th data-col="wallMs">Wall ms</th>
+            <th data-col="cpuMs">CPU ms</th>
+            <th data-col="heapPeakMB">Heap MB</th>
+            <th data-col="outputBytes">Output B</th>
+            <th data-col="success">Success</th>
+            <th>Trend (10)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="meta" id="meta"></p>
+  </div>
+  <script>
+    (() => {
+      const tbody = document.getElementById('tbody');
+      const filterInput = document.getElementById('filter');
+      const sortCol = document.getElementById('sort-col');
+      const sortDesc = document.getElementById('sort-desc');
+      const reloadBtn = document.getElementById('reload');
+      const statusEl = document.getElementById('status');
+      const metaEl = document.getElementById('meta');
+
+      let allRuns = [];
+      let currentSort = { col: 'wallMs', desc: true };
+
+      function fmtNum(n) { return n === null || n === undefined ? '—' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+      function fmtBool(b) { return b ? '<span class="success">✓</span>' : '<span class="fail">✗</span>'; }
+
+      function drawSparkline(canvas, values, color = '#0066cc') {
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const w = canvas.width = canvas.clientWidth * dpr;
+        const h = canvas.height = canvas.clientHeight * dpr;
+        ctx.scale(dpr, dpr);
+        const cw = canvas.clientWidth, ch = canvas.clientHeight;
+        ctx.clearRect(0, 0, cw, ch);
+        if (!values.length) return;
+        const min = Math.min(...values), max = Math.max(...values);
+        const range = max - min || 1;
+        const stepX = cw / (values.length - 1 || 1);
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        values.forEach((v, i) => {
+          const x = i * stepX;
+          const y = ch - ((v - min) / range) * (ch - 4) - 2;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      function render() {
+        const filter = filterInput.value.trim().toLowerCase();
+        let rows = allRuns.filter(r => !filter || r.tool.toLowerCase().includes(filter));
+
+        const col = currentSort.col;
+        const desc = currentSort.desc;
+        rows.sort((a, b) => {
+          let av = a[col], bv = b[col];
+          if (typeof av === 'boolean') { av = av ? 1 : 0; bv = bv ? 1 : 0; }
+          if (av === null || av === undefined) av = -Infinity;
+          if (bv === null || bv === undefined) bv = -Infinity;
+          return desc ? (bv > av ? 1 : bv < av ? -1 : 0) : (av > bv ? 1 : av < bv ? -1 : 0);
+        });
+
+        tbody.innerHTML = '';
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty">No results match filter</td></tr>';
+          return;
+        }
+
+        rows.forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${r.tool}</strong></td>
+            <td>${fmtNum(r.wallMs)}</td>
+            <td>${fmtNum(r.cpuMs)}</td>
+            <td>${fmtNum(r.heapPeakMB)}</td>
+            <td>${fmtNum(r.outputBytes)}</td>
+            <td>${fmtBool(r.success)}</td>
+            <td class="spark-cell"><canvas class="sparkline" aria-label="Wall time trend"></canvas></td>
+          `;
+          tbody.appendChild(tr);
+          const canvas = tr.querySelector('canvas');
+          drawSparkline(canvas, r.wallHistory || [], r.success ? '#2e7d32' : '#c62828');
+        });
+
+        document.querySelectorAll('th[data-col]').forEach(th => {
+          th.classList.toggle('sorted-asc', th.dataset.col === col && !desc);
+          th.classList.toggle('sorted-desc', th.dataset.col === col && desc);
+        });
+      }
+
+      function collectRuns(benchFiles) {
+        const byTool = new Map();
+        benchFiles.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        benchFiles.forEach(bf => {
+          (bf.results || []).forEach(r => {
+            if (!byTool.has(r.tool)) byTool.set(r.tool, []);
+            byTool.get(r.tool).push({ ...r, timestamp: bf.timestamp });
+          });
+        });
+        const runs = [];
+        byTool.forEach((arr, tool) => {
+          arr.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+          const last10 = arr.slice(-10).map(x => x.wallMs);
+          const latest = arr[arr.length - 1];
+          runs.push({ ...latest, tool, wallHistory: last10 });
+        });
+        return runs;
+      }
+
+      async function loadManifest() {
+        try {
+          const res = await fetch('results/manifest.json', { cache: 'no-store' });
+          if (res.ok) return await res.json();
+        } catch {}
+        return null;
+      }
+
+      async function loadResults() {
+        statusEl.textContent = 'Loading…';
+        reloadBtn.disabled = true;
+
+        let benchFiles = [];
+        const manifest = await loadManifest();
+
+        if (manifest && manifest.files?.length) {
+          const fetches = manifest.files.map(f => fetch(`results/${f}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null));
+          const results = await Promise.all(fetches);
+          benchFiles = results.filter(Boolean);
+        } else {
+          const now = new Date();
+          const attempts = [];
+          for (let i = 0; i < 20; i++) {
+            const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+            const ts = d.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            attempts.push(`bench-${ts}.json`);
+          }
+          const fetches = attempts.map(f => fetch(`results/${f}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null));
+          const results = await Promise.all(fetches);
+          benchFiles = results.filter(Boolean);
+        }
+
+        if (!benchFiles.length) {
+          statusEl.textContent = 'No result files found. Run bench to generate data.';
+          metaEl.textContent = '';
+          allRuns = [];
+          render();
+          reloadBtn.disabled = false;
+          return;
+        }
+
+        allRuns = collectRuns(benchFiles);
+        const latestTs = benchFiles[0]?.timestamp || 'unknown';
+        const toolCount = new Set(allRuns.map(r => r.tool)).size;
+        statusEl.textContent = `Loaded ${benchFiles.length} result file(s), ${allRuns.length} tools, ${toolCount} unique`;
+        metaEl.textContent = `Latest run: ${latestTs} • ${allRuns.filter(r => r.success).length}/${allRuns.length} passing`;
+        render();
+        reloadBtn.disabled = false;
+      }
+
+      filterInput.addEventListener('input', render);
+      sortCol.addEventListener('change', () => { currentSort.col = sortCol.value; render(); });
+      sortDesc.addEventListener('change', () => { currentSort.desc = sortDesc.checked; render(); });
+      document.querySelectorAll('th[data-col]').forEach(th => {
+        th.addEventListener('click', () => {
+          if (currentSort.col === th.dataset.col) currentSort.desc = !currentSort.desc;
+          else { currentSort.col = th.dataset.col; currentSort.desc = ['wallMs','cpuMs','heapPeakMB','outputBytes'].includes(th.dataset.col); }
+          sortCol.value = currentSort.col;
+          sortDesc.checked = currentSort.desc;
+          render();
+        });
+      });
+      reloadBtn.addEventListener('click', loadResults);
+
+      loadResults();
+    })();
+  </script>
+</body>
+</html>

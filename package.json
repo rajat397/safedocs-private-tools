@@ -1,0 +1,22 @@
+{
+  "name": "safedocs-private-tools",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "lint": "eslint . --ext .js,.ts",
+    "typecheck": "tsc --noEmit",
+    "bench": "node bench/run.js",
+    "fetch-corpus": "node bench/fetch-corpus.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0",
+    "@playwright/test": "^1.40.0",
+    "eslint": "^8.56.0",
+    "@eslint/js": "^8.56.0",
+    "typescript": "^5.3.0",
+    "pdf-lib": "^1.17.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

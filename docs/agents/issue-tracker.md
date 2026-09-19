@@ -12,5 +12,24 @@ Evaluator verdict log. One row per gate.
 | 2026-09-19 | PASS | toolbox report tester PASS + reviewer APPROVE (5 sections, evidence grounded, report-only) | docs/research/toolbox-improvement-report.md + matrix | 1 | orchestrator |
 | 2026-09-19 | PASS | ADR 0002 jittered specialist retry created (Full Jitter 100ms/5s/3attempts, free-tier guard only) | docs/adr/0002-jittered-specialist-retry.md verified | 0 | orchestrator |
 | 2026-09-19 | PASS | Warmup protocol removed; ADR 0001 superseded; specialist agents via `general-as-*` workaround | CONTEXT.md, orchestrator.md, ADR 0001 updated | 0 | orchestrator |
+| 2026-09-19 | PASS | A01 compare scaffold | tools/compare/index.js + core/registry.js | 0 | orchestrator |
+| 2026-09-19 | PASS | A02 text extraction | tools/compare/index.js (extractTextLayers) | 0 | orchestrator |
+| 2026-09-19 | PASS | A03 diff algorithm | tools/compare/index.js (diffTextLayers, myersDiff) | 0 | orchestrator |
+| 2026-09-19 | PASS | A04 HTML report | tools/compare/index.js (renderOverlay) | 0 | orchestrator |
+| 2026-09-19 | PASS | A05 CLI integration | tools/compare/index.js (zoom/opacity sliders, export buttons) | 0 | orchestrator |
+| 2026-09-19 | PASS | A06 test suite | tests/e2e/compare-smoke.spec.js | 0 | orchestrator |
+| 2026-09-19 | PASS | B01 PDF parse core | core/pdf/parse.ts (parsePdf, recoverXRef, fixTrailer, recoverPages) | 0 | orchestrator |
+| 2026-09-19 | PASS | B02 header detection | core/pdf/parse.ts (detectHeaderOffset, validateHeader) | 0 | orchestrator |
+| 2026-09-19 | PASS | B03 xref/stream parsing | core/pdf/parse.ts (decompressFlateDecode, parseXRefStream, parseXRefTable, linearScanForObjects) | 0 | orchestrator |
+| 2026-09-19 | PASS | B04 trailer chain walk | core/pdf/parse.ts (fixTrailer, walkPrevChain) | 0 | orchestrator |
+| 2026-09-19 | PASS | B05 page recovery | core/pdf/parse.ts (recoverPages, collectOrphans) | 0 | orchestrator |
+| 2026-09-19 | PASS | B06 repair CLI | tools/repair/index.js | 0 | orchestrator |
+| 2026-09-19 | PASS | B07 repair smoke test | tests/e2e/repair-smoke.spec.js | 0 | orchestrator |
+| 2026-09-19 | PASS | C01 bench runner | bench/run.js | 0 | orchestrator |
+| 2026-09-19 | PASS | C02 corpus fetch | bench/fetch-corpus.js | 0 | orchestrator |
+| 2026-09-19 | PASS | C03 metrics collection | bench/run.js (metrics) | 0 | orchestrator |
+| 2026-09-19 | PASS | C04 bench workflow | .github/workflows/bench.yml | 0 | orchestrator |
+| 2026-09-19 | PASS | C05 bench report UI | bench/index.html | 0 | orchestrator |
+| 2026-09-19 | PASS | C06 PR comment bot | .github/workflows/bench.yml (PR comment) | 0 | orchestrator |
 
 Rules: max 2 fix rounds total; builder must not commit until PASS; orchestrator owns fan-out.

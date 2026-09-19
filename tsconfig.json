@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "core/**/*.ts",
+    "tools/**/*.ts",
+    "bench/**/*.js",
+    "tests/**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "bench/corpus",
+    "bench/results"
+  ]
+}

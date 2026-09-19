@@ -1,0 +1,157 @@
+name: Benchmarks
+
+on:
+  pull_request:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Fetch corpus
+        run: node bench/fetch-corpus.js
+
+      - name: Run benchmarks
+        run: node bench/run.js --ci
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench/results/*.json
+          retention-days: 30
+
+      - name: Download baseline (main)
+        if: github.event_name == 'pull_request'
+        run: |
+          gh api repos/${{ github.repository }}/actions/runs \
+            --jq '.workflow_runs[] | select(.head_branch=="main" and .conclusion=="success" and .name=="Benchmarks") | .id' \
+            | head -1 > baseline_run_id.txt
+          BASELINE_RUN_ID=$(cat baseline_run_id.txt)
+          if [ -z "$BASELINE_RUN_ID" ]; then
+            echo "No successful main branch benchmark run found"
+            exit 0
+          fi
+          gh api repos/${{ github.repository }}/actions/runs/$BASELINE_RUN_ID/artifacts \
+            --jq '.artifacts[] | select(.name=="benchmark-results") | .archive_download_url' \
+            | head -1 > baseline_artifact_url.txt
+          ARTIFACT_URL=$(cat baseline_artifact_url.txt)
+          if [ -z "$ARTIFACT_URL" ]; then
+            echo "No benchmark-results artifact found in baseline run"
+            exit 0
+          fi
+          curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "$ARTIFACT_URL" -o baseline.zip
+          unzip -o baseline.zip -d baseline
+
+      - name: Check regression
+        if: github.event_name == 'pull_request'
+        id: regression
+        run: |
+          set -e
+          BASELINE_FILE=$(find baseline -name "*.json" | head -1)
+          CURRENT_FILE=$(find bench/results -name "*.json" | head -1)
+          
+          if [ -z "$BASELINE_FILE" ] || [ -z "$CURRENT_FILE" ]; then
+            echo "Missing baseline or current results"
+            exit 1
+          fi
+          
+          BASELINE_WALL=$(jq -r '.wallMs' "$BASELINE_FILE")
+          CURRENT_WALL=$(jq -r '.wallMs' "$CURRENT_FILE")
+          
+          if [ -z "$BASELINE_WALL" ] || [ -z "$CURRENT_WALL" ] || [ "$BASELINE_WALL" = "null" ] || [ "$CURRENT_WALL" = "null" ]; then
+            echo "Invalid wallMs values"
+            exit 1
+          fi
+          
+          REGRESSION=$(echo "scale=2; (($CURRENT_WALL - $BASELINE_WALL) / $BASELINE_WALL) * 100" | bc)
+          echo "Baseline wallMs: $BASELINE_WALL"
+          echo "Current wallMs: $CURRENT_WALL"
+          echo "Regression: $REGRESSION%"
+          
+          THRESHOLD=15
+          IS_REGRESSION=$(echo "$REGRESSION > $THRESHOLD" | bc)
+          
+          echo "regression_percent=$REGRESSION" >> $GITHUB_OUTPUT
+          echo "is_regression=$IS_REGRESSION" >> $GITHUB_OUTPUT
+          echo "threshold=$THRESHOLD" >> $GITHUB_OUTPUT
+          echo "baseline_file=$BASELINE_FILE" >> $GITHUB_OUTPUT
+          echo "current_file=$CURRENT_FILE" >> $GITHUB_OUTPUT
+          
+          if [ "$IS_REGRESSION" = "1" ]; then
+            echo "::error::Performance regression detected: ${REGRESSION}% > ${THRESHOLD}%"
+            exit 1
+          fi
+
+      - name: Post regression PR comment
+        if: github.event_name == 'pull_request' && steps.regression.outputs.is_regression == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REGRESSION_PERCENT: ${{ steps.regression.outputs.regression_percent }}
+          THRESHOLD: ${{ steps.regression.outputs.threshold }}
+          BASELINE_FILE: ${{ steps.regression.outputs.baseline_file }}
+          CURRENT_FILE: ${{ steps.regression.outputs.current_file }}
+        run: |
+          set -e
+          
+          # Generate per-tool comparison
+          COMMENT_BODY="## ⚠️ Performance Regression Detected\n\n"
+          COMMENT_BODY+="**Overall regression:** ${REGRESSION_PERCENT}% (threshold: ${THRESHOLD}%)\n\n"
+          COMMENT_BODY+="| Tool | Baseline (ms) | Current (ms) | Delta | Status |\n"
+          COMMENT_BODY+="|------|---------------|--------------|-------|--------|\n"
+          
+          # Extract per-tool results from both files
+          jq -r '.results[] | "\(.tool)\t\(.wallMs)\t\(.success)"' "$BASELINE_FILE" > baseline_tools.tsv
+          jq -r '.results[] | "\(.tool)\t\(.wallMs)\t\(.success)"' "$CURRENT_FILE" > current_tools.tsv
+          
+          # Compare each tool
+          while IFS=$'\t' read -r tool baseline_wall baseline_success; do
+            current_line=$(grep "^$tool\t" current_tools.tsv || true)
+            if [ -z "$current_line" ]; then
+              COMMENT_BODY+="| $tool | $baseline_wall | N/A | N/A | ❓ |\n"
+              continue
+            fi
+            current_wall=$(echo "$current_line" | cut -f2)
+            current_success=$(echo "$current_line" | cut -f3)
+            
+            if [ "$baseline_wall" = "0" ] || [ "$current_wall" = "0" ]; then
+              delta="N/A"
+              status="⚠️"
+            else
+              delta=$(echo "scale=1; (($current_wall - $baseline_wall) / $baseline_wall) * 100" | bc)
+              if (( $(echo "$delta > $THRESHOLD" | bc -l) )); then
+                status="❌"
+              elif (( $(echo "$delta > 0" | bc -l) )); then
+                status="⚠️"
+              else
+                status="✅"
+              fi
+              delta="${delta}%"
+            fi
+            
+            COMMENT_BODY+="| $tool | $baseline_wall | $current_wall | $delta | $status |\n"
+          done < baseline_tools.tsv
+          
+          COMMENT_BODY+="\n---\n"
+          COMMENT_BODY+="[View benchmark artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n"
+          
+          gh pr comment "$PR_NUMBER" --body "$COMMENT_BODY"
