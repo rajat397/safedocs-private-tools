@@ -73,6 +73,13 @@ go through `main#view` (`aria-live="polite"` in `index.html`).
 - Tools should show progress (`.progress` in `styles.css`) and process large
   inputs in chunks / workers where possible.
 
+## Hard-refresh note
+
+- If the toolbox shows 28 tools instead of 34, hard-refresh with
+  `Ctrl+Shift+R`, then check in an incognito window.
+- Still stale? DevTools → Application → Service Workers → Unregister
+  the SW, then reload. Footer must read `v4·34`.
+
 ## Changing caps
 
 Edit `core/caps.js` (`CAPS`, `TOOL_CAPS`) and update this table in the same

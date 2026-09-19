@@ -4,10 +4,11 @@
  * Same-origin GETs are cached freely; cross-origin GETs are cached ONLY for
  * the pinned library CDNs in vendor/cdn-pins.js (js/traineddata, no file
  * bytes). See PRIVACY.md "Exceptions" for the offline-limit note. */
-const VERSION = 'toolbox-shell-v3';
+const VERSION = 'toolbox-shell-v4';
 const PRECACHE = [
   './',
   './index.html',
+  './404.html',
   './styles.css',
   './app.js',
   './manifest.webmanifest',
@@ -64,7 +65,9 @@ self.addEventListener('fetch', (e) => {
           caches.open(VERSION).then((c) => c.put(request, copy)).catch(() => {});
         }
         return res;
-      }).catch(() => caches.match('./index.html'));
+      }).catch(() => {
+        if (request.mode === 'navigate') return caches.match('./index.html');
+      });
     }),
   );
 });

@@ -101,7 +101,14 @@
 - No binaries committed: `tests/e2e/corpus/*.pdf` is gitignored — CI /
   reviewers regenerate via the script; only the builder script is tracked.
 
-## Privacy proof
+## Stale cache? Hard-refresh note
+
+- If the toolbox shows 28 tools instead of 34, you are seeing a stale
+  cached shell: hard-refresh with `Ctrl+Shift+R`, then check in an
+  incognito window.
+- Still stale? Open DevTools → Application → Service Workers →
+  Unregister the SW, then reload.
+- Healthy footer must read `v4·34`.
 
 - Zero upload: files never leave your device; all processing runs locally
 - No servers, no analytics uploads, no tracking of file contents
