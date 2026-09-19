@@ -11,5 +11,6 @@ Evaluator verdict log. One row per gate.
 | 2026-09-19 | PASS | docs hard-refresh note: 28-vs-34 stale-cache, Ctrl+Shift+R + incognito + SW unregister, footer v4·34 | README.md Stale cache section + LIMITS.md Hard-refresh note verified, no other files touched, no commit | 0 | docs-writer |
 | 2026-09-19 | PASS | toolbox report tester PASS + reviewer APPROVE (5 sections, evidence grounded, report-only) | docs/research/toolbox-improvement-report.md + matrix | 1 | orchestrator |
 | 2026-09-19 | PASS | ADR 0002 jittered specialist retry created (Full Jitter 100ms/5s/3attempts, free-tier guard only) | docs/adr/0002-jittered-specialist-retry.md verified | 0 | orchestrator |
+| 2026-09-19 | PASS | Warmup protocol removed; ADR 0001 superseded; specialist agents via `general-as-*` workaround | CONTEXT.md, orchestrator.md, ADR 0001 updated | 0 | orchestrator |
 
 Rules: max 2 fix rounds total; builder must not commit until PASS; orchestrator owns fan-out.
