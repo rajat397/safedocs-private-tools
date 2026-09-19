@@ -143,6 +143,7 @@ export function mount(el, ctx = {}) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button data-f="clear" class="secondary">Clear</button>
         <button data-f="save">Save PNG</button>
+        <button data-f="audit" class="secondary">Show audit info</button>
       </div>
       <label style="font-size:13px;font-weight:600">PDF to sign (optional)
         <input type="file" data-f="pdf" accept="application/pdf,.pdf" />
@@ -213,6 +214,14 @@ export function mount(el, ctx = {}) {
     pngBlob = await canvasToPngBlob(canvas);
     saveBlob(pngBlob, 'signature.png', 'image/png', 'dlpng');
     say(`PNG saved — ${(pngBlob.size / 1024).toFixed(1)} KB, transparent, HiDPI (${canvas.width}×${canvas.height}px).`);
+  });
+
+  // T6: UI-only local audit panel — no crypto/PKI, no fetch, no server log.
+  q('audit').addEventListener('click', () => {
+    const f = q('pdf').files?.[0];
+    const when = new Date().toLocaleString();
+    const filePart = f ? `${f.name} (${(f.size / 1024).toFixed(1)} KB)` : 'no PDF chosen';
+    say(`Audit (local only — on-device, no server log) — ${when} · tool: sign · file: ${filePart}.`);
   });
 
   q('pdf').addEventListener('change', () => {

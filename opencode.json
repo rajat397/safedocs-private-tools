@@ -24,7 +24,8 @@
           "to-spec": "allow",
           "to-tickets": "allow",
           "wayfinder": "allow",
-          "ask-matt": "allow"
+          "ask-matt": "allow",
+          "res-research-brief": "allow"
         }
       }
     },
@@ -40,7 +41,13 @@
       "permission": {
         "skill": {
           "research": "allow",
-          "ask-matt": "allow"
+          "ask-matt": "allow",
+          "res-deep-research": "allow",
+          "res-competitor-research": "allow",
+          "res-customer-research": "allow",
+          "res-dossier": "allow",
+          "res-research-brief": "allow",
+          "res-survey-design": "allow"
         }
       }
     },
@@ -98,7 +105,11 @@
         "skill": {
           "grill-with-docs": "allow",
           "ask-matt": "allow",
-          "to-spec": "allow"
+          "to-spec": "allow",
+          "res-research-brief": "allow",
+          "res-competitor-research": "allow",
+          "res-customer-research": "allow",
+          "res-survey-design": "allow"
         }
       }
     },
@@ -108,7 +119,9 @@
           "domain-modeling": "allow",
           "research": "allow",
           "wayfinder": "allow",
-          "ask-matt": "allow"
+          "ask-matt": "allow",
+          "res-deep-research": "allow",
+          "res-dossier": "allow"
         }
       }
     },

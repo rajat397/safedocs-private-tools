@@ -56,3 +56,19 @@ are shipped in this repository.
 - CDN:
   - https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js
   - https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js
+
+## meshcode-ai/skills-research – MIT
+
+- Upstream: https://github.com/meshcode-ai/skills-research.git
+- License: MIT
+- Copyright: © 2026 meshcode-ai
+- Source: alirezarezvani/claude-skills@research/ (MIT)
+- Skills installed (6):
+  - res-research-brief
+  - res-deep-research
+  - res-competitor-research
+  - res-customer-research
+  - res-survey-design
+  - res-dossier
+- Local path: .opencode/skills/res-*/SKILL.md
+- Note: deferred res-litreview / res-patent-landscape not installed.

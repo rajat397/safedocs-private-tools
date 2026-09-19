@@ -4,7 +4,7 @@
  * Reusable file dropzone. Drag & drop + click-to-browse + keyboard.
  * Files stay in memory — this module performs zero network I/O.
  */
-import { checkFiles, batchMeter } from './caps.js';
+import { checkFiles, batchMeter, activeCaps } from './caps.js';
 import { fmtBytes, escapeHtml } from './utils.js';
 
 export function createDropzone({
@@ -21,9 +21,18 @@ export function createDropzone({
   root.setAttribute('role', 'button');
   root.setAttribute('aria-label', label);
 
+  let capLine = '';
+  try {
+    const caps = activeCaps(toolId);
+    if (caps && Number.isFinite(caps.maxSingleMB) && Number.isFinite(caps.maxTotalMB)) {
+      capLine = `Up to ${caps.maxSingleMB} MB per file · ${caps.maxTotalMB} MB total on this device`;
+    }
+  } catch { /* pre-flight line stays hidden — checkFiles still enforces caps */ }
+
   root.innerHTML = `
     <div class="dz-title">${escapeHtml(label)}</div>
     <div class="dz-sub">${escapeHtml(sub)}</div>
+    ${capLine ? `<div class="dz-sub dz-cap">${escapeHtml(capLine)}</div>` : ''}
     <div class="meter-wrap" hidden><div class="meter-label"></div><div class="meter"><div class="meter-fill"></div></div></div>
     <ul class="filelist" hidden></ul>`;
 

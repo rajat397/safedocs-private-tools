@@ -11,6 +11,11 @@ export async function mount(el, ctx = {}) {
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "pdf-redact-burn";
 
   page.optionsEl.innerHTML = `
+    <ol class="muted" style="margin:0 0 8px 18px;font-size:12px">
+      <li>Box all sensitive regions</li>
+      <li>Burn to image-only copy</li>
+      <li>Re-open output & verify before sharing</li>
+    </ol>
     <label>Password (if encrypted)
       <input type="password" data-f="pw" placeholder="Optional" />
     </label>
@@ -339,7 +344,7 @@ export async function mount(el, ctx = {}) {
       const outName = fileName.replace(/\.pdf$/i, "") + "-redacted.pdf";
       saveBytes(bytes, outName, "application/pdf");
       try { q("pw").value = ""; } catch {}
-      status(`Done — burned ${boxCount()} box(es) into a new image-only copy (${outName}). Open the COPY and visually confirm every box before sharing. Original text layer is discarded.`);
+      status(`Done — burned ${boxCount()} box(es) into a new image-only copy (${outName}). Re-open output & verify before sharing — confirm every box. Original text layer is discarded.`);
     } catch (e) { status("Error: " + (e?.message || e)); }
     finally {
       try { q("pw").value = ""; } catch {}

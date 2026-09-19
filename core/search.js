@@ -37,6 +37,7 @@ export const SYNONYMS = {
   grayscale: ['grayscale', 'convert'],
   greyscale: ['grayscale', 'convert'],
   'b w': ['grayscale', 'convert'],
+  'b&w': ['grayscale', 'convert'],
   bw: ['grayscale', 'convert'],
   'black and white': ['grayscale', 'convert'],
   'target size': ['compress', 'target'],

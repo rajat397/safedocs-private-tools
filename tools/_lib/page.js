@@ -87,6 +87,7 @@ export function shell(el, tool = {}, ctx = {}) {
   root.className = 'tool-page';
   root.dataset.tool = id;
   root.innerHTML = `
+    <div data-slot="head"><span class="pill green">offline-ready · on-device</span></div>
     <div data-slot="dz"></div>
     <dl class="kv tool-caps" data-slot="caps">
       <dt>Accepted types</dt><dd data-slot="caps-accept">${escapeHtml(accept)}</dd>
