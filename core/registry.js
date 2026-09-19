@@ -36,6 +36,12 @@ export const TOOLS = [
   { id: 'pdf-to-text', name: 'PDF → Text', desc: 'Extract selectable text from a PDF to .txt.', cat: 'Convert', accept: '.pdf,application/pdf', multiple: false, keywords: ['extract text', 'to text', 'txt', 'selectable', 'copy'], synonyms: ['pdf to txt', 'get text out', 'extract words'] },
   { id: 'pdf-unlock-view', name: 'Unlock / View PDF', desc: 'Open password-protected PDFs you own for viewing.', cat: 'Security', accept: '.pdf,application/pdf', multiple: false, keywords: ['unlock', 'decrypt', 'password', 'remove password', 'view'], synonyms: ['decrypt pdf', 'remove password', 'open locked pdf'] },
   { id: 'pdf-redact-burn', name: 'Redact & burn', desc: 'Permanently black-out text regions (burned in, not overlay).', cat: 'Security', accept: '.pdf,application/pdf', multiple: false, keywords: ['redact', 'burn', 'black out', 'permanent', 'censor', 'privacy'], synonyms: ['black out text', 'burn redactions', 'permanent redact'] },
+  { id: 'pdf-metadata-edit', name: 'Edit metadata', desc: 'View & edit PDF title, author, keywords (info dictionary).', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['metadata', 'info', 'title', 'author', 'keywords', 'exif', 'properties'], synonyms: ['edit metadata', 'pdf info', 'change title', 'pdf properties'] },
+  { id: 'pdf-split-by-size', name: 'Split by size', desc: 'Split a PDF into parts each under a target MB size.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['split', 'size', 'chunk', 'parts', 'mb', 'divide'], synonyms: ['split by size', 'divide pdf', 'chunk pdf'] },
+  { id: 'pdf-crop', name: 'Crop PDF', desc: 'Trim page margins via CropBox (vector, reversible).', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['crop', 'trim', 'margin', 'margins', 'cut', 'cropbox'], synonyms: ['crop pdf', 'trim margins', 'cut margins'] },
+  { id: 'pdf-extract-images', name: 'Extract images', desc: 'Save embedded JPEG images from a PDF, no re-encode.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['extract', 'images', 'pictures', 'photos', 'jpeg', 'jpg', 'embedded'], synonyms: ['extract images', 'get pictures out', 'save images'] },
+  { id: 'pdf-remove-annotations', name: 'Remove annotations', desc: 'Strip comments, links & markup; keeps page text.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['annotations', 'comments', 'markup', 'links', 'notes', 'highlight', 'strip'], synonyms: ['remove comments', 'strip annotations', 'delete markup'] },
+  { id: 'pdf-n-up', name: 'N-up PDF', desc: 'Combine 2 or 4 pages per sheet for printing.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['n-up', 'nup', '2-up', '4-up', 'impose', 'imposition', 'booklet', 'sheet', 'print'], synonyms: ['2 up', '4 up', 'pages per sheet', 'impose pdf'] },
 ];
 
 const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
@@ -51,6 +57,9 @@ const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
  * MVP-1 T01 additions (all under tools/pdf/ to avoid new dirs):
  *   tools/pdf/{rotate,add-remove-pages,extract-pages,target-size,
  *     grayscale,text-to-pdf,to-text,unlock-view,redact-burn}.js
+ * P3A additions (pdf-lib only, same dir):
+ *   tools/pdf/{metadata-edit,split-by-size,crop,extract-images,
+ *     remove-annotations,n-up}.js
  */
 const MODULES = {
   'pdf-merge': './tools/pdf/merge.js',
@@ -81,6 +90,12 @@ const MODULES = {
   'pdf-to-text': './tools/pdf/to-text.js',
   'pdf-unlock-view': './tools/pdf/unlock-view.js',
   'pdf-redact-burn': './tools/pdf/redact-burn.js',
+  'pdf-metadata-edit': './tools/pdf/metadata-edit.js',
+  'pdf-split-by-size': './tools/pdf/split-by-size.js',
+  'pdf-crop': './tools/pdf/crop.js',
+  'pdf-extract-images': './tools/pdf/extract-images.js',
+  'pdf-remove-annotations': './tools/pdf/remove-annotations.js',
+  'pdf-n-up': './tools/pdf/n-up.js',
 };
 
 /** Exact module URL for one tool (accepts id string or tool object). */
@@ -141,6 +156,11 @@ const QUERY_SYNONYMS = {
   blackout: 'redact',
   burn: 'redact',
   permanent: 'redact',
+  margin: 'crop',
+  trim: 'crop',
+  booklet: 'n-up',
+  markup: 'annotations',
+  comment: 'annotations',
 };
 
 export function searchTools(q) {

@@ -3,37 +3,41 @@
 // tools/pdf/unlock-view.js — open a password-protected PDF you own, save an unencrypted copy.
 // Honest copy: removes the password only if you know it. No cracking, no brute-force,
 // no bypass. Uses pinned pdf-lib@1.17.1 only (same pin as tools/pdf + tools/sign).
+// (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Protected PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (required — file stays locked without it)
-        <input type="password" data-f="pw" placeholder="Enter the known password" autocomplete="off" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;display:flex;gap:8px;align-items:flex-start">
-        <input type="checkbox" data-f="own" style="margin-top:3px" />
-        <span>I own this PDF (or have the owner's permission) to remove its password for viewing.</span>
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button data-f="inspect">Open & inspect</button>
-        <button data-f="go">Unlock & download copy</button>
-      </div>
-      <p style="font-size:12px;color:#475569;margin:0;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:8px">This copies the file without a password <strong>only if you know the correct password</strong>. It cannot crack, guess, or bypass unknown passwords. Everything runs on-device; nothing is uploaded.</p>
-      <div data-f="meta" style="font-size:12px;color:#64748b;white-space:pre-wrap"></div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "pdf-unlock-view";
-  const trackedUrls = [];
   let srcBytes = null;
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
+  page.optionsEl.innerHTML = `
+    <label>Password (required — file stays locked without it)
+      <input type="password" data-f="pw" placeholder="Enter the known password" autocomplete="off" />
+    </label>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400">
+      <input type="checkbox" data-f="own" style="margin-top:3px" />
+      <span>I own this PDF (or have the owner's permission) to remove its password for viewing.</span>
+    </label>
+    <p style="font-size:12px;color:#475569;margin:0;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:8px">This copies the file without a password <strong>only if you know the correct password</strong>. It cannot crack, guess, or bypass unknown passwords. Everything runs on-device; nothing is uploaded.</p>`;
+
+  const inspectBtn = document.createElement("button");
+  inspectBtn.type = "button";
+  inspectBtn.className = "secondary";
+  inspectBtn.textContent = "Open & inspect";
+  page.optionsEl.append(inspectBtn);
+
+  const metaEl = document.createElement("div");
+  metaEl.dataset.f = "meta";
+  metaEl.className = "muted";
+  metaEl.style.cssText = "font-size:12px;white-space:pre-wrap";
+  page.outputEl.append(metaEl);
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -46,16 +50,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
   async function loadPdfLib() {
     if (globalThis.PDFLib) return globalThis.PDFLib;
     try {
@@ -114,10 +109,9 @@ export async function mount(el, ctx = {}) {
 
   const onInspect = async () => {
     try {
-      const f = q("file").files[0];
+      const f = files[0] || page.getFiles()[0];
       if (!f) { status("Pick a PDF."); return; }
       if (!requirePermission()) return;
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -134,13 +128,13 @@ export async function mount(el, ctx = {}) {
     finally { try { q("pw").value = ""; } catch {} }
   };
 
-  const onGo = async () => {
+  page.runBtn("Unlock & download copy", async (got) => {
     let outBytes = null;
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
       if (!requirePermission()) return;
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -168,14 +162,13 @@ export async function mount(el, ctx = {}) {
       clearSecrets();
       try { if (outBytes) outBytes.fill(0); } catch {}
     }
-  };
+  });
 
-  q("inspect").addEventListener("click", onInspect);
-  q("go").addEventListener("click", onGo);
+  inspectBtn.addEventListener("click", onInspect);
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     clearSecrets();
-    try { q("file").value = ""; } catch {}
-    el.innerHTML = "";
+    try { q("own").checked = false; } catch {}
+    page.cleanup();
   };
 }

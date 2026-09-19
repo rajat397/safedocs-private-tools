@@ -1,36 +1,38 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/text-to-pdf.js — textarea / .txt / .md / .csv → PDF (Helvetica, wrapped). Client-side only.
+// tools/pdf/text-to-pdf.js — textarea / .txt / .md / .csv → PDF (Helvetica, wrapped). Client-side only. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Text file (.txt / .md / .csv, optional)
-        <input type="file" data-f="file" accept=".txt,.md,.csv,text/plain" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Text
-        <textarea data-f="text" rows="10" placeholder="Paste or type text here, or pick a file above…" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-family:monospace;font-size:13px"></textarea>
-      </label>
-      <label style="font-size:13px;font-weight:600">Preset
-        <select data-f="preset" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px">
-          <option value="S">S — compact (10pt)</option>
-          <option value="M" selected>M — standard (12pt)</option>
-          <option value="L">L — large (14pt)</option>
-        </select>
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button data-f="go">Convert & download</button></div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
-  const trackedUrls = [];
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
+
+  page.optionsEl.innerHTML = `
+    <label>Text file (.txt / .md / .csv, optional)
+      <input type="file" data-f="file" accept=".txt,.md,.csv,text/plain" />
+    </label>
+    <label>Text
+      <textarea data-f="text" rows="10" placeholder="Paste or type text here, or pick a file above…"></textarea>
+    </label>
+    <label>Preset
+      <select data-f="preset">
+        <option value="S">S — compact (10pt)</option>
+        <option value="M" selected>M — standard (12pt)</option>
+        <option value="L">L — large (14pt)</option>
+      </select>
+    </label>`;
+
+  let files = [];
+  // The shell run guard needs ≥1 file, but this tool also accepts bare typed
+  // text. When the textarea has text and no real file is selected, seed a
+  // synthetic typed.txt so Run stays enabled; the run logic still prefers
+  // the live textarea value. Identity-checked so real picks replace it.
+  let syntheticFile = null;
 
   const PRESETS = { S: 10, M: 12, L: 14 };
   const MAX_CHARS = 500000;
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -43,16 +45,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
   async function loadPdfLib() {
     if (globalThis.PDFLib) return globalThis.PDFLib;
     try {
@@ -103,29 +96,56 @@ export async function mount(el, ctx = {}) {
     return out;
   }
 
+  async function loadTextFile(f) {
+    const chk = checkCaps([f], { toolId: "text-to-pdf", accept: ".txt,.md,.csv,text/plain", multiple: false });
+    const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
+    if (chk && chk.accepted && !chk.accepted.length) return;
+    status("Reading " + file.name + "…");
+    const text = await file.text();
+    q("text").value = text;
+    status(`Loaded ${file.name} (${text.length.toLocaleString()} chars).`);
+  }
+
+  page.onFiles((accepted) => {
+    files = [...accepted];
+    if (accepted.length === 1 && accepted[0] === syntheticFile) return; // our own seed echo
+    syntheticFile = null;
+    if (files[0]) loadTextFile(files[0]).catch((err) => status("Error: " + (err?.message || err)));
+  });
+
   q("file").addEventListener("change", async (e) => {
     try {
       const f = e.target.files[0];
       if (!f) return;
-      capsInfo("text-to-pdf");
-      const chk = checkCaps([f], { toolId: "text-to-pdf", accept: ".txt,.md,.csv,text/plain", multiple: false });
-      const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
-      if (chk && chk.accepted && !chk.accepted.length) return;
-      status("Reading " + file.name + "…");
-      const text = await file.text();
-      q("text").value = text;
-      status(`Loaded ${file.name} (${text.length.toLocaleString()} chars).`);
+      await loadTextFile(f);
     } catch (err) { status("Error: " + (err?.message || err)); }
   });
 
-  const onGo = async () => {
+  q("text").addEventListener("input", () => {
     try {
+      const hasText = (q("text").value || "").length > 0;
+      const current = page.getFiles();
+      const hasReal = current.some((f) => f !== syntheticFile);
+      if (hasText && !hasReal && !syntheticFile) {
+        syntheticFile = new File([q("text").value], "typed.txt", { type: "text/plain" });
+        page.setFiles([syntheticFile]);
+        files = page.getFiles();
+      } else if (!hasText && syntheticFile && !hasReal) {
+        syntheticFile = null;
+        page.setFiles([]);
+        files = [];
+      }
+    } catch {}
+  });
+
+  page.runBtn("Convert & download", async (got) => {
+    try {
+      files = [...(got || [])];
       let text = q("text").value || "";
       // If textarea empty but a file is picked, read it.
       if (!text) {
-        const f = q("file").files[0];
-        if (f) {
-          capsInfo("text-to-pdf");
+        const f = files.find((x) => x !== syntheticFile) || files[0] || q("file").files[0];
+        if (f && f !== syntheticFile) {
           const chk = checkCaps([f], { toolId: "text-to-pdf", accept: ".txt,.md,.csv,text/plain", multiple: false });
           const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
           if (chk && chk.accepted && !chk.accepted.length) return;
@@ -146,30 +166,30 @@ export async function mount(el, ctx = {}) {
       const maxWidth = A4[0] - MARGIN * 2;
       const lineHeight = size * 1.4;
       const color = rgb(0.12, 0.12, 0.12);
-      let page = doc.addPage(A4);
+      let pg = doc.addPage(A4);
       let y = A4[1] - MARGIN;
       const logical = text.replace(/\r\n/g, "\n").split("\n");
       for (const raw of logical) {
         const wrapped = wrapLine(raw, font, size, maxWidth);
         for (const line of wrapped) {
-          if (y - lineHeight < MARGIN) { page = doc.addPage(A4); y = A4[1] - MARGIN; }
+          if (y - lineHeight < MARGIN) { pg = doc.addPage(A4); y = A4[1] - MARGIN; }
           y -= lineHeight;
           // pdf-lib drawText renders WinAnsi; replace lone surrogates safely.
           const safe = line.replace(/[\u{10000}-\u{10FFFF}]/gu, "?");
-          page.drawText(safe, { x: MARGIN, y, size, font, color, maxWidth });
+          pg.drawText(safe, { x: MARGIN, y, size, font, color, maxWidth });
         }
       }
       const n = doc.getPageCount();
       if (n > 500) throw new Error(`Page-count guard: output has ${n} pages (cap 500). Shorten the text or use S preset.`);
-      const f0 = q("file").files[0];
+      const f0 = files.find((x) => x !== syntheticFile) || q("file").files[0];
       const base = (f0?.name || "text").replace(/\.[^.]+$/, "") || "text";
       saveBytes(await doc.save({ useObjectStreams: true }), `${base}.pdf`, "application/pdf");
       status(`Done — ${text.length.toLocaleString()} chars → ${n} page(s) at ${preset} (${size}pt Helvetica).`);
     } catch (e) { status("Error: " + (e?.message || e)); }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
-    el.innerHTML = "";
+    files = [];
+    syntheticFile = null;
+    page.cleanup();
   };
 }

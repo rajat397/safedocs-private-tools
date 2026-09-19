@@ -4,35 +4,31 @@
 // pdf-lib cannot do real password encryption client-side, so this tool
 // re-saves the file, records a protection hint in metadata only, clears
 // the password field, and warns clearly. Never claims real encryption.
+// (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (hint only — NOT real protection)
-        <input type="password" data-f="pw" placeholder="Hint label only" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Source password (if file is encrypted)
-        <input type="password" data-f="srcpw" placeholder="Optional — only if source needs it" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button data-f="go">Apply hint & download</button></div>
-      <p style="font-size:12px;color:#92400e;margin:0;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px">Warning: this is NOT encryption. It copies the PDF and stores a metadata hint only. Anyone can open the file without a password. For real password protection use a server / desktop step (e.g. qpdf).</p>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "protect";
-  const trackedUrls = [];
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
-  function checkCaps(files, opts) {
+  page.optionsEl.innerHTML = `
+    <label>Password (hint only — NOT real protection)
+      <input type="password" data-f="pw" placeholder="Hint label only" />
+    </label>
+    <label>Source password (if file is encrypted)
+      <input type="password" data-f="srcpw" placeholder="Optional — only if source needs it" />
+    </label>
+    <p style="font-size:12px;color:#92400e;margin:0;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px">Warning: this is NOT encryption. It copies the PDF and stores a metadata hint only. Anyone can open the file without a password. For real password protection use a server / desktop step (e.g. qpdf).</p>`;
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
+  function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
-        const r = ctx.checkFiles(files, opts);
+        const r = ctx.checkFiles(list, opts);
         if (r && r.rejected && r.rejected.length) {
           status("Rejected: " + r.rejected.map((x) => `${x.file?.name || "file"}: ${x.reason}`).join(" | "));
         }
@@ -41,16 +37,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
   async function loadPdfLib() {
     if (globalThis.PDFLib) return globalThis.PDFLib;
     try {
@@ -88,11 +75,11 @@ export async function mount(el, ctx = {}) {
     }
   }
 
-  const onGo = async () => {
+  page.runBtn("Apply hint & download", async (got) => {
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -115,12 +102,11 @@ export async function mount(el, ctx = {}) {
       status("Done — hint-only copy saved (NOT encrypted; warning above applies). Password fields cleared.");
     } catch (e) { status("Error: " + (e?.message || e)); }
     finally { try { q("pw").value = ""; } catch {} try { q("srcpw").value = ""; } catch {} }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { q("pw").value = ""; } catch {}
     try { q("srcpw").value = ""; } catch {}
-    el.innerHTML = "";
+    page.cleanup();
   };
 }

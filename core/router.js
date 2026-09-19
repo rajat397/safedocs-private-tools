@@ -8,6 +8,9 @@
  * Tool module contract (owned by tools/* builders):
  *   export async function mount(rootEl, ctx) -> cleanupFn | void
  *   ctx = { tool, createDropzone, checkFiles, activeCaps, baseUrl, download, isMobile }
+ *   ctx.download(input, filename, mime): central local-only download helper
+ *     (Blob/File/Uint8Array/ArrayBuffer/DataView/TypedArray/string -> Blob,
+ *     default filename "output"). No network, no uploads.
  */
 import { TOOLS, getTool, searchTools, categories, moduleCandidates } from './registry.js';
 import { list as listRecents } from './recents.js';

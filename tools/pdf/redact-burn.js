@@ -1,35 +1,39 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/redact-burn.js — rect-select redaction on canvas preview, fillRect black, raster rebuild (burned copy).
+// tools/pdf/redact-burn.js — rect-select redaction on canvas preview, fillRect black, raster rebuild (burned copy). (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div style="display:flex;gap:8px;align-items:center;font-size:13px;flex-wrap:wrap">
-        <button data-f="open">Open preview</button>
-        <button data-f="prev">‹ Prev</button>
-        <span data-f="plabel" style="color:#64748b">no file</span>
-        <button data-f="next">Next ›</button>
-      </div>
-      <canvas data-f="cv" style="max-width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair"></canvas>
-      <div style="font-size:12px;color:#64748b">Drag a rectangle on the preview to black it out. Repeat per page.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button data-f="undo">Undo box</button>
-        <button data-f="clearpage">Clear page boxes</button>
-        <button data-f="go">Burn & download</button>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center"><progress data-f="prog" max="100" value="0" style="flex:1;display:none"></progress><span data-f="pct" style="font-size:12px;color:#64748b"></span></div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const setProgress = page.setProgress;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "pdf-redact-burn";
-  const trackedUrls = [];
+
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <div class="btnrow" style="margin-top:0">
+      <button type="button" class="secondary" data-f="open">Open preview</button>
+      <button type="button" class="secondary" data-f="prev">‹ Prev</button>
+      <span data-f="plabel" class="muted" style="font-size:13px;align-self:center">no file</span>
+      <button type="button" class="secondary" data-f="next">Next ›</button>
+    </div>
+    <p class="muted" style="margin:0;font-size:12px">Drag a rectangle on the preview to black it out. Repeat per page.</p>
+    <div class="btnrow" style="margin-top:0">
+      <button type="button" class="secondary" data-f="undo">Undo box</button>
+      <button type="button" class="secondary" data-f="clearpage">Clear page boxes</button>
+    </div>`;
+
+  const cv = document.createElement("canvas");
+  cv.dataset.f = "cv";
+  cv.style.cssText = "max-width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair";
+  page.outputEl.append(cv);
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   const liveCanvases = new Set();
   const RASTER_MAX_DESKTOP = 100;
   const RASTER_MAX_MOBILE = 25;
@@ -91,16 +95,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return mobile ? 8000 : 12000;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
   function clampScale(s, fallback = 1.5) {
     s = parseFloat(s);
     if (!Number.isFinite(s)) return fallback;
@@ -173,17 +168,17 @@ export async function mount(el, ctx = {}) {
   }
 
   function repaint(previewRect = null) {
-    const cv = q("cv");
+    const c = q("cv");
     if (!baseCanvas) return;
-    cv.width = baseCanvas.width;
-    cv.height = baseCanvas.height;
-    const c2d = cv.getContext("2d");
+    c.width = baseCanvas.width;
+    c.height = baseCanvas.height;
+    const c2d = c.getContext("2d");
     c2d.fillStyle = "#fff";
-    c2d.fillRect(0, 0, cv.width, cv.height);
+    c2d.fillRect(0, 0, c.width, c.height);
     c2d.drawImage(baseCanvas, 0, 0);
     c2d.fillStyle = "#000";
     for (const b of pageBoxes(cur)) {
-      c2d.fillRect(b.nx * cv.width, b.ny * cv.height, b.nw * cv.width, b.nh * cv.height);
+      c2d.fillRect(b.nx * c.width, b.ny * c.height, b.nw * c.width, b.nh * c.height);
     }
     if (previewRect) {
       c2d.fillStyle = "rgba(0,0,0,0.85)";
@@ -196,13 +191,13 @@ export async function mount(el, ctx = {}) {
   }
 
   function canvasPos(evt) {
-    const cv = q("cv");
-    const r = cv.getBoundingClientRect();
-    const cx = ((evt.clientX - r.left) / Math.max(1, r.width)) * cv.width;
-    const cy = ((evt.clientY - r.top) / Math.max(1, r.height)) * cv.height;
+    const c = q("cv");
+    const r = c.getBoundingClientRect();
+    const cx = ((evt.clientX - r.left) / Math.max(1, r.width)) * c.width;
+    const cy = ((evt.clientY - r.top) / Math.max(1, r.height)) * c.height;
     return {
-      x: Math.min(cv.width, Math.max(0, cx)),
-      y: Math.min(cv.height, Math.max(0, cy)),
+      x: Math.min(c.width, Math.max(0, cx)),
+      y: Math.min(c.height, Math.max(0, cy)),
     };
   }
 
@@ -210,19 +205,19 @@ export async function mount(el, ctx = {}) {
     if (!pdfDoc) { status("Open a PDF first."); return; }
     cur = Math.min(numPages, Math.max(1, n));
     status(`Rendering page ${cur}/${numPages}…`);
-    const page = await pdfDoc.getPage(cur);
+    const pg = await pdfDoc.getPage(cur);
     try {
       const mobile = isMobileDevice();
       const maxDim = rasterDimCap(mobile);
       let scale = clampScale(mobile ? 1.0 : 1.5);
-      let viewport = page.getViewport({ scale });
+      let viewport = pg.getViewport({ scale });
       let vw = Math.floor(viewport.width);
       let vh = Math.floor(viewport.height);
       if (vw * vh > RASTER_MAX_PIXELS || vw > maxDim || vh > maxDim) {
         const fit = Math.min(Math.sqrt(RASTER_MAX_PIXELS / Math.max(1, vw * vh)), vw > 0 ? maxDim / vw : 1, vh > 0 ? maxDim / vh : 1);
         scale = scale * fit;
         if (!Number.isFinite(scale) || scale < RASTER_MIN_SCALE) throw new Error(`Page ${cur} too large to preview safely (${vw}×${vh}px exceeds 16MP / ${maxDim}px cap).`);
-        viewport = page.getViewport({ scale });
+        viewport = pg.getViewport({ scale });
         vw = Math.floor(viewport.width);
         vh = Math.floor(viewport.height);
       }
@@ -233,21 +228,20 @@ export async function mount(el, ctx = {}) {
       const c2d = baseCanvas.getContext("2d");
       c2d.fillStyle = "#fff";
       c2d.fillRect(0, 0, vw, vh);
-      await page.render({ canvasContext: c2d, viewport }).promise;
+      await pg.render({ canvasContext: c2d, viewport }).promise;
       repaint();
       const n2 = pageBoxes(cur).length;
       q("plabel").textContent = `p${cur}/${numPages} · ${n2} box(es) · total ${boxCount()}`;
       status(n2 ? `Page ${cur}/${numPages} — ${n2} black box(es). Drag for more.` : `Page ${cur}/${numPages} — drag to redact.`);
     } finally {
-      try { await page.cleanup?.(); } catch {}
+      try { await pg.cleanup?.(); } catch {}
     }
   }
 
   const onOpen = async () => {
     try {
-      const f = q("file").files[0];
+      const f = files[0] || page.getFiles()[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -274,9 +268,10 @@ export async function mount(el, ctx = {}) {
     finally { try { q("pw").value = ""; } catch {} }
   };
 
-  const onGo = async () => {
+  page.runBtn("Burn & download", async (got) => {
     let tmpCanvas = null;
     try {
+      files = [...(got || [])];
       if (!pdfDoc) { status("Open a PDF preview first."); return; }
       if (!boxCount()) { status("No boxes yet — drag at least one rectangle on the preview."); return; }
       const mobile = isMobileDevice();
@@ -286,22 +281,20 @@ export async function mount(el, ctx = {}) {
       status("Loading pdf-lib…");
       const { PDFDocument } = await loadPdfLib();
       const out = await PDFDocument.create();
-      const prog = q("prog");
-      const pct = q("pct");
-      try { prog.style.display = ""; prog.max = String(numPages); prog.value = 0; pct.textContent = "0%"; } catch {}
+      setProgress(0);
       for (let i = 1; i <= numPages; i++) {
         status(`Burning page ${i}/${numPages}…`);
-        const page = await pdfDoc.getPage(i);
+        const pg = await pdfDoc.getPage(i);
         try {
           let scale = clampScale(BURN_SCALE);
-          let viewport = page.getViewport({ scale });
+          let viewport = pg.getViewport({ scale });
           let vw = Math.floor(viewport.width);
           let vh = Math.floor(viewport.height);
           if (vw * vh > RASTER_MAX_PIXELS || vw > maxDim || vh > maxDim) {
             const fit = Math.min(Math.sqrt(RASTER_MAX_PIXELS / Math.max(1, vw * vh)), vw > 0 ? maxDim / vw : 1, vh > 0 ? maxDim / vh : 1);
             scale = scale * fit;
             if (!Number.isFinite(scale) || scale < RASTER_MIN_SCALE) throw new Error(`Page ${i}/${numPages} too large to burn safely (${vw}×${vh}px exceeds 16MP / ${maxDim}px cap).`);
-            viewport = page.getViewport({ scale });
+            viewport = pg.getViewport({ scale });
             vw = Math.floor(viewport.width);
             vh = Math.floor(viewport.height);
             if (vw * vh > RASTER_MAX_PIXELS || vw > maxDim || vh > maxDim || vw < 1 || vh < 1) throw new Error(`Page ${i}/${numPages} too large to burn safely (${vw}×${vh}px exceeds 16MP / ${maxDim}px cap).`);
@@ -313,7 +306,7 @@ export async function mount(el, ctx = {}) {
           const c2d = tmpCanvas.getContext("2d");
           c2d.fillStyle = "#fff";
           c2d.fillRect(0, 0, vw, vh);
-          await page.render({ canvasContext: c2d, viewport }).promise;
+          await pg.render({ canvasContext: c2d, viewport }).promise;
           // Burn boxes as opaque pixels — no vector/text survives underneath.
           c2d.fillStyle = "#000";
           for (const b of pageBoxes(i)) {
@@ -327,13 +320,13 @@ export async function mount(el, ctx = {}) {
           const p = out.addPage([img.width, img.height]);
           p.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
         } finally {
-          try { await page.cleanup?.(); } catch {}
+          try { await pg.cleanup?.(); } catch {}
         }
         tmpCanvas.width = 0;
         tmpCanvas.height = 0;
         liveCanvases.delete(tmpCanvas);
         tmpCanvas = null;
-        try { prog.value = i; pct.textContent = Math.round((i / numPages) * 100) + "%"; } catch {}
+        setProgress(i / numPages);
         await new Promise((r) => setTimeout(r, 0));
       }
       const bytes = await out.save({ useObjectStreams: true });
@@ -346,7 +339,6 @@ export async function mount(el, ctx = {}) {
       const outName = fileName.replace(/\.pdf$/i, "") + "-redacted.pdf";
       saveBytes(bytes, outName, "application/pdf");
       try { q("pw").value = ""; } catch {}
-      try { prog.value = numPages; pct.textContent = "100%"; } catch {}
       status(`Done — burned ${boxCount()} box(es) into a new image-only copy (${outName}). Open the COPY and visually confirm every box before sharing. Original text layer is discarded.`);
     } catch (e) { status("Error: " + (e?.message || e)); }
     finally {
@@ -354,7 +346,7 @@ export async function mount(el, ctx = {}) {
       try { if (tmpCanvas) { tmpCanvas.width = 0; tmpCanvas.height = 0; liveCanvases.delete(tmpCanvas); } } catch {}
       tmpCanvas = null;
     }
-  };
+  });
 
   const onDown = (e) => {
     if (!baseCanvas) return;
@@ -378,20 +370,19 @@ export async function mount(el, ctx = {}) {
   const onUp = (e) => {
     if (!drag) return;
     if (e) { try { e.preventDefault(); } catch {} }
-    const cv = q("cv");
+    const c = q("cv");
     const x = Math.min(drag.x0, drag.x1);
     const y = Math.min(drag.y0, drag.y1);
     const w = Math.abs(drag.x1 - drag.x0);
     const h = Math.abs(drag.y1 - drag.y0);
     drag = null;
-    if (w < 4 || h < 4 || !cv.width || !cv.height) { repaint(); return; }
-    pageBoxes(cur).push({ nx: x / cv.width, ny: y / cv.height, nw: w / cv.width, nh: h / cv.height });
+    if (w < 4 || h < 4 || !c.width || !c.height) { repaint(); return; }
+    pageBoxes(cur).push({ nx: x / c.width, ny: y / c.height, nw: w / c.width, nh: h / c.height });
     repaint();
     q("plabel").textContent = `p${cur}/${numPages} · ${pageBoxes(cur).length} box(es) · total ${boxCount()}`;
     status(`Box added on p${cur} (${pageBoxes(cur).length} here, ${boxCount()} total).`);
   };
 
-  const cv = q("cv");
   cv.addEventListener("mousedown", onDown);
   window.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
@@ -418,10 +409,9 @@ export async function mount(el, ctx = {}) {
   q("next").addEventListener("click", onNext);
   q("undo").addEventListener("click", onUndo);
   q("clearpage").addEventListener("click", onClear);
-  q("go").addEventListener("click", onGo);
 
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try {
       if (baseCanvas) { baseCanvas.width = 0; baseCanvas.height = 0; liveCanvases.delete(baseCanvas); }
       liveCanvases.forEach((c) => { c.width = 0; c.height = 0; });
@@ -440,6 +430,6 @@ export async function mount(el, ctx = {}) {
       cv.removeEventListener("touchend", onUp);
     } catch {}
     try { q("pw").value = ""; } catch {}
-    el.innerHTML = "";
+    page.cleanup();
   };
 }

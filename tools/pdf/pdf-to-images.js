@@ -1,38 +1,43 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/pdf-to-images.js — render PDF pages to PNG/JPEG via pdf.js. Client-side only.
+// tools/pdf/pdf-to-images.js — render PDF pages to PNG/JPEG via pdf.js. Client-side only. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:13px">
-        <label>Format <select data-f="fmt" style="padding:6px;border:1px solid #e2e8f0;border-radius:8px">
-          <option value="png">PNG</option><option value="jpeg">JPEG q0.85</option>
-        </select></label>
-        <label>Scale <select data-f="scale" style="padding:6px;border:1px solid #e2e8f0;border-radius:8px">
-          <option value="1.5">1.5x</option><option value="2" selected>2x</option><option value="1">1x</option>
-        </select></label>
-        <label>Pages <input data-f="pages" placeholder="all / 1-3" style="padding:6px;border:1px solid #e2e8f0;border-radius:8px;width:120px" /></label>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button data-f="go">Render & download</button></div>
-      <div data-f="thumbs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
-  const trackedUrls = [];
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const setProgress = page.setProgress;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
+
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <label>Format
+      <select data-f="fmt">
+        <option value="png">PNG</option><option value="jpeg">JPEG q0.85</option>
+      </select>
+    </label>
+    <label>Scale
+      <select data-f="scale">
+        <option value="1.5">1.5x</option><option value="2" selected>2x</option><option value="1">1x</option>
+      </select>
+    </label>
+    <label>Pages
+      <input data-f="pages" placeholder="all / 1-3" />
+    </label>`;
+
+  const thumbsEl = document.createElement("div");
+  thumbsEl.dataset.f = "thumbs";
+  thumbsEl.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+  page.outputEl.append(thumbsEl);
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   const liveCanvases = new Set();
   const MAX_PAGES = 50;
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -47,12 +52,7 @@ export async function mount(el, ctx = {}) {
   }
   function saveBlob(blob, filename) {
     if (typeof ctx.download === "function") return ctx.download(blob, filename, blob.type);
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
+    return page.addDownload(blob, filename, `Download ${filename}`);
   }
   function clampScale(s, fallback = 2) {
     s = parseFloat(s);
@@ -124,11 +124,11 @@ export async function mount(el, ctx = {}) {
     }
   }
 
-  const onGo = async () => {
+  page.runBtn("Render & download", async (got) => {
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo("pdf-to-images");
       const chk = checkCaps([f], { toolId: "pdf-to-images", accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -149,31 +149,34 @@ export async function mount(el, ctx = {}) {
       q("thumbs").innerHTML = "";
       const base = file.name.replace(/\.pdf$/i, "");
       const scale = clampScale(q("scale").value, 2);
+      let done = 0;
       for (const n of pages) {
         status(`Rendering page ${n}/${pdf.numPages}…`);
-        const page = await pdf.getPage(n);
-        const viewport = page.getViewport({ scale });
+        const pg = await pdf.getPage(n);
+        const viewport = pg.getViewport({ scale });
         const canvas = document.createElement("canvas");
         liveCanvases.add(canvas);
         canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
         canvas.style.cssText = "max-width:160px;border:1px solid #e2e8f0;border-radius:8px";
         const c2d = canvas.getContext("2d");
         c2d.fillStyle = "#fff"; c2d.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: c2d, viewport }).promise;
+        await pg.render({ canvasContext: c2d, viewport }).promise;
         q("thumbs").appendChild(canvas);
         const fmt = q("fmt").value;
         const blob = await new Promise((res) => canvas.toBlob(res, fmt === "png" ? "image/png" : "image/jpeg", 0.85));
         if (blob) saveBlob(blob, `${base}-p${n}.${fmt === "png" ? "png" : "jpg"}`);
+        done += 1;
+        setProgress(done / pages.length);
       }
       try { q("pw").value = ""; } catch {}
       const warnTxt = warnings.length ? " Warnings: " + warnings.join(" ") : "";
       status(`Done — rendered ${pages.length} page(s). Each downloaded separately (client-side).${warnTxt}`);
     } catch (e) { status("Error: " + (e?.message || e)); }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { liveCanvases.forEach((c) => { c.width = 0; c.height = 0; }); liveCanvases.clear(); } catch {}
-    el.innerHTML = "";
+    try { q("pw").value = ""; } catch {}
+    page.cleanup();
   };
 }

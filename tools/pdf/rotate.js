@@ -1,40 +1,32 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/rotate.js — rotate pages 90/180/270 (all or selected). Client-side only, zero upload.
+// tools/pdf/rotate.js — rotate pages 90/180/270 (all or selected). Client-side only, zero upload. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Rotation (clockwise)
-        <select data-f="angle" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px">
-          <option value="90">90&deg;</option>
-          <option value="180">180&deg;</option>
-          <option value="270">270&deg;</option>
-        </select>
-      </label>
-      <label style="font-size:13px;font-weight:600">Pages (blank = all, e.g. 1,3,5-7)
-        <input type="text" data-f="pages" placeholder="All pages" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button data-f="go">Rotate & download</button>
-      </div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "pdf-rotate";
-  const trackedUrls = [];
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <label>Rotation (clockwise)
+      <select data-f="angle">
+        <option value="90">90&deg;</option>
+        <option value="180">180&deg;</option>
+        <option value="270">270&deg;</option>
+      </select>
+    </label>
+    <label>Pages (blank = all, e.g. 1,3,5-7)
+      <input type="text" data-f="pages" placeholder="All pages" />
+    </label>`;
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -47,16 +39,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
 
   async function loadPdfLib() {
     if (globalThis.PDFLib) return globalThis.PDFLib;
@@ -132,11 +115,11 @@ export async function mount(el, ctx = {}) {
     return out;
   }
 
-  const onGo = async () => {
+  page.runBtn("Rotate & download", async (got) => {
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -152,9 +135,9 @@ export async function mount(el, ctx = {}) {
       const targets = parsePages(q("pages").value, n) ?? src.getPageIndices();
       status("Rotating…");
       for (const idx of targets) {
-        const page = src.getPage(idx);
-        const cur = page.getRotation().angle;
-        page.setRotation(degrees((cur + angle) % 360));
+        const pg = src.getPage(idx);
+        const cur = pg.getRotation().angle;
+        pg.setRotation(degrees((cur + angle) % 360));
       }
       const bytes = await src.save();
       saveBytes(bytes, file.name.replace(/\.pdf$/i, "") + `-rotated-${angle}.pdf`, "application/pdf");
@@ -165,11 +148,10 @@ export async function mount(el, ctx = {}) {
       status("Error: " + (e?.message || e));
     }
     finally { try { q("pw").value = ""; } catch {} }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { q("pw").value = ""; } catch {}
-    el.innerHTML = "";
+    page.cleanup();
   };
 }

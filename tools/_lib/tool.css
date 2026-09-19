@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+/* tools/_lib/tool.css — additive tool-page styles. Tokens only (see styles.css :root). */
+.tool-page{display:grid;gap:10px}
+.tool-page .tool-caps{margin:4px 0}
+.tool-page .tool-meter{margin:0}
+.tool-page .tool-options{display:grid;gap:10px;margin:0}
+.tool-page .tool-options label{font-size:13px;font-weight:600;display:grid;gap:6px}
+.tool-page .tool-options input[type="text"],
+.tool-page .tool-options input[type="number"],
+.tool-page .tool-options input[type="password"],
+.tool-page .tool-options select,
+.tool-page .tool-options textarea{padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font-size:14px;max-width:100%}
+.tool-page .tool-options input:focus-visible,
+.tool-page .tool-options select:focus-visible,
+.tool-page .tool-options button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.tool-page .tool-status{min-height:1.4em;font-size:13px}
+.tool-page .tool-output{display:grid;gap:8px}
+.tool-page .tool-output:empty{display:none}
+.tool-page .tool-result{margin-top:0}
+.tool-page .progress{margin-top:4px}
+@media (max-width:600px){
+  .tool-page .tool-options{grid-template-columns:1fr}
+}

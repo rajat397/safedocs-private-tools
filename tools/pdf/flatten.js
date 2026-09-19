@@ -1,35 +1,32 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/flatten.js — raster burn: render each page via pdf.js, rebuild PDF (burns forms/annotations).
+// tools/pdf/flatten.js — raster burn: render each page via pdf.js, rebuild PDF (burns forms/annotations). (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Quality
-        <select data-f="q" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px">
-          <option value="0.85">High (JPEG q0.85, 2x)</option>
-          <option value="0.7" selected>Balanced (JPEG q0.7, 1.5x)</option>
-        </select>
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button data-f="go">Flatten & download</button></div>
-      <p style="font-size:12px;color:#64748b;margin:0">Raster-burn flattens forms/annotations into pixels. Text is no longer selectable.</p>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
-  const trackedUrls = [];
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const setProgress = page.setProgress;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
+
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <label>Quality
+      <select data-f="q">
+        <option value="0.85">High (JPEG q0.85, 2x)</option>
+        <option value="0.7" selected>Balanced (JPEG q0.7, 1.5x)</option>
+      </select>
+    </label>
+    <p class="muted" style="margin:0;font-size:12px">Raster-burn flattens forms/annotations into pixels. Text is no longer selectable.</p>`;
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   const liveCanvases = new Set();
   const MAX_PAGES = 100;
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -42,16 +39,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
   function clampScale(s, fallback = 1.5) {
     s = parseFloat(s);
     if (!Number.isFinite(s)) return fallback;
@@ -113,12 +101,12 @@ export async function mount(el, ctx = {}) {
     }
   }
 
-  const onGo = async () => {
+  page.runBtn("Flatten & download", async (got) => {
     let tmpCanvas = null;
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo("flatten");
       const chk = checkCaps([f], { toolId: "flatten", accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -132,20 +120,21 @@ export async function mount(el, ctx = {}) {
       const out = await PDFDocument.create();
       for (let i = 1; i <= pdf.numPages; i++) {
         status(`Burning page ${i}/${pdf.numPages}…`);
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale });
+        const pg = await pdf.getPage(i);
+        const viewport = pg.getViewport({ scale });
         tmpCanvas = document.createElement("canvas");
         liveCanvases.add(tmpCanvas);
         tmpCanvas.width = Math.floor(viewport.width); tmpCanvas.height = Math.floor(viewport.height);
         const c2d = tmpCanvas.getContext("2d");
         c2d.fillStyle = "#fff"; c2d.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height);
-        await page.render({ canvasContext: c2d, viewport }).promise;
+        await pg.render({ canvasContext: c2d, viewport }).promise;
         const img = await out.embedJpg(tmpCanvas.toDataURL("image/jpeg", qual));
         const p = out.addPage([img.width, img.height]);
         p.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
         tmpCanvas.width = 0; tmpCanvas.height = 0;
         liveCanvases.delete(tmpCanvas);
         tmpCanvas = null;
+        setProgress(i / pdf.numPages);
       }
       const bytes = await out.save({ useObjectStreams: true });
       saveBytes(bytes, file.name.replace(/\.pdf$/i, "") + "-flattened.pdf", "application/pdf");
@@ -155,11 +144,11 @@ export async function mount(el, ctx = {}) {
     finally {
       try { if (tmpCanvas) { tmpCanvas.width = 0; tmpCanvas.height = 0; liveCanvases.delete(tmpCanvas); } } catch {}
     }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { liveCanvases.forEach((c) => { c.width = 0; c.height = 0; }); liveCanvases.clear(); } catch {}
-    el.innerHTML = "";
+    try { q("pw").value = ""; } catch {}
+    page.cleanup();
   };
 }

@@ -1,9 +1,10 @@
 <!-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 | Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com -->
-# Limits
+# Limits (34 tools)
 
 Caps keep tools fast and crash-free, especially on phones. Enforced in
 `core/caps.js:checkFiles` (via `core/dropzone.js`); tools must not accept
-files the dropzone rejected without re-validating.
+files the dropzone rejected without re-validating. All 34 registry tools
+inherit the base profile below except the three `TOOL_CAPS` overrides.
 
 ## Profiles
 
@@ -40,6 +41,16 @@ measured RAM / CPU reason, same change as the `core/caps.js` edit.
 bitmaps in RAM). `pdf-redact-burn` additionally guards page count
 (100 desktop / 25 mobile) and raster size (16 MP / `maxImageDim`) inside
 the tool; those are tool-level guards, not `checkFiles` caps.
+
+### 6 new tools (P3A, pdf-lib only)
+
+`pdf-metadata-edit`, `pdf-split-by-size`, `pdf-crop`,
+`pdf-extract-images`, `pdf-remove-annotations`, `pdf-n-up` inherit the
+base profile above (no `TOOL_CAPS` entry: vector-only pdf-lib ops with no
+measured RAM spike beyond the base caps). Tool-level guards, not
+`checkFiles` caps: 500-page cap inside every tool; `pdf-extract-images`
+additionally caps downloads at the first 100 images per run (re-run on
+page ranges for the rest) since each image triggers a separate download.
 
 ## Batch meter
 

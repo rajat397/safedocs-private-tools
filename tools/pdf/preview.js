@@ -1,32 +1,35 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/preview.js — render PDF pages via pdf.js into canvas thumbnails. No download needed.
+// tools/pdf/preview.js — render PDF pages via pdf.js into canvas thumbnails. No download needed. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div style="display:flex;gap:8px;align-items:center;font-size:13px;flex-wrap:wrap">
-        <button data-f="go">Preview</button>
-        <span data-f="info" style="color:#64748b"></span>
-      </div>
-      <div data-f="pages" style="display:flex;gap:10px;flex-wrap:wrap"></div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
-  const trackedUrls = [];
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const setProgress = page.setProgress;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
+
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <p class="muted" style="margin:0;font-size:12px">Previews render on-device. No download needed.</p>`;
+
+  const infoEl = document.createElement("div");
+  infoEl.dataset.f = "info";
+  infoEl.className = "muted";
+  infoEl.style.cssText = "font-size:13px";
+  page.outputEl.append(infoEl);
+
+  const pagesEl = document.createElement("div");
+  pagesEl.dataset.f = "pages";
+  pagesEl.style.cssText = "display:flex;gap:10px;flex-wrap:wrap";
+  page.outputEl.append(pagesEl);
+
+  let files = [];
   const liveCanvases = new Set();
   const MAX_PREVIEW = 20;
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -92,7 +95,6 @@ export async function mount(el, ctx = {}) {
 
   async function render(file) {
     status("Loading pdf.js…");
-    capsInfo("preview");
     const chk = checkCaps([file], { toolId: "preview", accept: ".pdf,application/pdf", multiple: false });
     const useFile = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : file;
     if (chk && chk.accepted && !chk.accepted.length) return;
@@ -106,8 +108,8 @@ export async function mount(el, ctx = {}) {
     const max = Math.min(pdf.numPages, MAX_PREVIEW);
     for (let i = 1; i <= max; i++) {
       status(`Rendering ${i}/${pdf.numPages}…`);
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale });
+      const pg = await pdf.getPage(i);
+      const viewport = pg.getViewport({ scale });
       const canvas = document.createElement("canvas");
       liveCanvases.add(canvas);
       canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
@@ -115,32 +117,35 @@ export async function mount(el, ctx = {}) {
       canvas.title = `Page ${i}`;
       const c2d = canvas.getContext("2d");
       c2d.fillStyle = "#fff"; c2d.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: c2d, viewport }).promise;
+      await pg.render({ canvasContext: c2d, viewport }).promise;
       const wrap = document.createElement("div");
       wrap.style.cssText = "display:grid;gap:4px;justify-items:center;font-size:12px;color:#64748b";
       wrap.appendChild(canvas);
       const lab = document.createElement("span"); lab.textContent = `p${i}`;
       wrap.appendChild(lab);
       q("pages").appendChild(wrap);
+      setProgress(i / max);
     }
     status(pdf.numPages > MAX_PREVIEW ? `Showing first ${MAX_PREVIEW} of ${pdf.numPages} pages (page-count guard).` : `Done — ${pdf.numPages} page(s).`);
   }
 
-  const onGo = async () => {
+  page.onFiles((accepted) => {
+    files = [...accepted];
+    if (files[0]) render(files[0]).catch((err) => status("Error: " + (err?.message || err)));
+  });
+
+  page.runBtn("Preview", async (got) => {
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
       await render(f);
     } catch (e) { status("Error: " + (e?.message || e)); }
-  };
-  const onChange = async (e) => {
-    if (e.target.files[0]) { try { await render(e.target.files[0]); } catch (err) { status("Error: " + (err?.message || err)); } }
-  };
-  q("go").addEventListener("click", onGo);
-  q("file").addEventListener("change", onChange);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { liveCanvases.forEach((c) => { c.width = 0; c.height = 0; }); liveCanvases.clear(); } catch {}
-    el.innerHTML = "";
+    try { q("pw").value = ""; } catch {}
+    page.cleanup();
   };
 }

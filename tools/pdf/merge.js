@@ -1,31 +1,27 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/merge.js — merge multiple PDFs in order. Client-side only, zero upload.
+// tools/pdf/merge.js — merge multiple PDFs in order. Client-side only, zero upload. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Select PDFs (in merge order)
-        <input type="file" data-f="files" accept="application/pdf,.pdf" multiple />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password for encrypted sources (optional)
-        <input type="password" data-f="pw" placeholder="If any PDF is encrypted" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div data-f="list" style="font-size:13px;color:#64748b">No files selected.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button data-f="go">Merge & download</button>
-      </div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
 
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
-  const trackedUrls = [];
+  page.optionsEl.innerHTML = `
+    <label>Password for encrypted sources (optional)
+      <input type="password" data-f="pw" placeholder="If any PDF is encrypted" />
+    </label>
+    <div data-f="list" class="muted" style="font-size:13px">No files selected.</div>`;
+
   let files = [];
+  page.onFiles((accepted) => {
+    files = [...accepted];
+    q("list").textContent = files.length
+      ? files.map((f, i) => `${i + 1}. ${f.name} (${Math.round(f.size / 1024)} KB)`).join("  ·  ")
+      : "No files selected.";
+  });
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -38,23 +34,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
-
-  q("files").addEventListener("change", (e) => {
-    files = [...e.target.files];
-    q("list").textContent = files.length
-      ? files.map((f, i) => `${i + 1}. ${f.name} (${Math.round(f.size / 1024)} KB)`).join("  ·  ")
-      : "No files selected.";
-  });
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
 
   async function loadPdfLib() {
     if (globalThis.PDFLib) return globalThis.PDFLib;
@@ -104,10 +84,10 @@ export async function mount(el, ctx = {}) {
     }
   }
 
-  const onGo = async () => {
+  page.runBtn("Merge & download", async (got) => {
     try {
+      files = [...(got || [])];
       if (!files.length) { status("Pick at least 2 PDFs."); return; }
-      capsInfo("pdf-merge");
       const chk = checkCaps(files, { toolId: "pdf-merge", accept: ".pdf,application/pdf", multiple: true });
       let useFiles = files;
       if (chk) {
@@ -139,11 +119,10 @@ export async function mount(el, ctx = {}) {
     } catch (e) {
       status("Error: " + (e?.message || e));
     }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
     files = [];
-    el.innerHTML = "";
+    try { q("pw").value = ""; } catch {}
+    page.cleanup();
   };
 }

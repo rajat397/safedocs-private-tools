@@ -35,7 +35,30 @@ export function fmtBytes(n) {
   return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${units[u]}`;
 }
 
-export function download(blob, filename) {
+/**
+ * Central download helper (P0). Local-only: creates one object URL,
+ * triggers a download via an anchor click, revokes after 10s.
+ * No network, no uploads.
+ * @param {Blob|File|Uint8Array|ArrayBuffer|DataView|TypedArray|string} input
+ * @param {string} [filename="output"]
+ * @param {string} [mime="application/octet-stream"]
+ */
+export function download(input, filename = 'output', mime = 'application/octet-stream') {
+  let blob;
+  if (input instanceof Blob) {
+    blob = input;
+  } else if (typeof input === 'string') {
+    blob = new Blob([input], { type: mime });
+  } else if (input instanceof ArrayBuffer) {
+    blob = new Blob([input.slice(0)], { type: mime });
+  } else if (input instanceof Uint8Array) {
+    blob = new Blob([input.slice()], { type: mime });
+  } else if (ArrayBuffer.isView(input)) {
+    const copy = new Uint8Array(input.buffer, input.byteOffset, input.byteLength).slice();
+    blob = new Blob([copy], { type: mime });
+  } else {
+    throw new TypeError('download: unsupported input type');
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

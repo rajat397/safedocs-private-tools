@@ -1,31 +1,24 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/reorder.js — reorder pages via order spec like "3,1,2" or "2-4,1".
+// tools/pdf/reorder.js — reorder pages via order spec like "3,1,2" or "2-4,1". (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">New order (e.g. 3,1,2 or 2-4,1)
-        <input type="text" data-f="order" placeholder="3,1,2" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button data-f="go">Reorder & download</button>
-      </div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
-  const trackedUrls = [];
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <label>New order (e.g. 3,1,2 or 2-4,1)
+      <input type="text" data-f="order" placeholder="3,1,2" />
+    </label>`;
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -38,16 +31,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
 
   function parseOrder(str, n, warnings = []) {
     str = (str || "").trim();
@@ -114,11 +98,11 @@ export async function mount(el, ctx = {}) {
     }
   }
 
-  const onGo = async () => {
+  page.runBtn("Reorder & download", async (got) => {
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo("reorder");
       const chk = checkCaps([f], { toolId: "reorder", accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -137,10 +121,10 @@ export async function mount(el, ctx = {}) {
       const warnTxt = warnings.length ? " " + warnings.join(" ") : "";
       status(`Done — new order: ${order.map((i) => i + 1).join(",")}.${warnTxt}`);
     } catch (e) { status("Error: " + (e?.message || e)); }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
-    el.innerHTML = "";
+    files = [];
+    try { q("pw").value = ""; } catch {}
+    page.cleanup();
   };
 }

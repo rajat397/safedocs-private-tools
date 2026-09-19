@@ -1,32 +1,28 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/images-to-pdf.js — images (PNG/JPG/WebP) → PDF. Client-side only.
+// tools/pdf/images-to-pdf.js — images (PNG/JPG/WebP) → PDF. Client-side only. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Images (in order)
-        <input type="file" data-f="files" accept="image/*" multiple />
-      </label>
-      <label style="font-size:13px;font-weight:600">Page size
-        <select data-f="size" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px">
-          <option value="fit">Fit to each image</option>
-          <option value="a4">A4 (fit inside)</option>
-        </select>
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button data-f="go">Convert & download</button></div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
-  const trackedUrls = [];
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const setProgress = page.setProgress;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
+
+  page.optionsEl.innerHTML = `
+    <label>Page size
+      <select data-f="size">
+        <option value="fit">Fit to each image</option>
+        <option value="a4">A4 (fit inside)</option>
+      </select>
+    </label>`;
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   const liveCanvases = new Set();
   const MAX_IMAGES = 100;
-  let files = [];
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -39,26 +35,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
-
-  q("files").addEventListener("change", (e) => {
-    files = [...e.target.files];
-    capsInfo("images-to-pdf");
-    const chk = checkCaps(files, { toolId: "images-to-pdf", accept: "image/*", multiple: true });
-    if (chk && chk.accepted) {
-      // Keep accepted list for next step; show rejected reasons via status.
-      files = chk.accepted.length ? chk.accepted : files;
-    }
-  });
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
 
   async function loadPdfLib() {
     if (globalThis.PDFLib) return globalThis.PDFLib;
@@ -76,11 +53,11 @@ export async function mount(el, ctx = {}) {
     throw new Error("Could not load pdf-lib@1.17.1");
   }
 
-  const onGo = async () => {
+  page.runBtn("Convert & download", async (got) => {
     let tmpCanvas = null;
     try {
+      files = [...(got || [])];
       if (!files.length) { status("Pick images first."); return; }
-      capsInfo("images-to-pdf");
       const chk = checkCaps(files, { toolId: "images-to-pdf", accept: "image/*", multiple: true });
       let useFiles = files;
       if (chk) {
@@ -92,6 +69,7 @@ export async function mount(el, ctx = {}) {
       const { PDFDocument } = await loadPdfLib();
       const out = await PDFDocument.create();
       const A4 = [595.28, 841.89];
+      let done = 0;
       for (const f of useFiles) {
         status("Embedding " + f.name + "…");
         const buf = new Uint8Array(await f.arrayBuffer());
@@ -120,6 +98,8 @@ export async function mount(el, ctx = {}) {
           const p = out.addPage([img.width, img.height]);
           p.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
         }
+        done += 1;
+        setProgress(done / useFiles.length);
       }
       saveBytes(await out.save({ useObjectStreams: true }), "images.pdf", "application/pdf");
       status(`Done — ${useFiles.length} image(s) → PDF.`);
@@ -127,12 +107,10 @@ export async function mount(el, ctx = {}) {
     finally {
       try { if (tmpCanvas) { tmpCanvas.width = 0; tmpCanvas.height = 0; } } catch {}
     }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
-    try { liveCanvases.forEach((c) => { c.width = 0; c.height = 0; }); liveCanvases.clear(); } catch {}
     files = [];
-    el.innerHTML = "";
+    try { liveCanvases.forEach((c) => { c.width = 0; c.height = 0; }); liveCanvases.clear(); } catch {}
+    page.cleanup();
   };
 }

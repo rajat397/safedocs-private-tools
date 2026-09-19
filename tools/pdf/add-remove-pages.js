@@ -1,53 +1,43 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/add-remove-pages.js — delete ranges, insert pages from a second PDF, add blank pages. Client-side only.
+// tools/pdf/add-remove-pages.js — delete ranges, insert pages from a second PDF, add blank pages. Client-side only. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password for source (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Delete pages (e.g. 2, 4-5 — blank = keep all)
-        <input type="text" data-f="delete" placeholder="2, 4-5" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Insert from second PDF (optional)
-        <input type="file" data-f="insFile" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password for insert PDF (if encrypted)
-        <input type="password" data-f="insPw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Insert pages (e.g. 1-2 — blank = all)
-        <input type="text" data-f="insRanges" placeholder="all" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Insert at position (1-based, blank/end = append)
-        <input type="text" data-f="insAt" placeholder="e.g. 3" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
-        <label style="font-size:13px;font-weight:600">Blank pages to add
-          <input type="number" data-f="blankCount" min="0" max="100" value="0" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;width:100%" />
-        </label>
-        <label style="font-size:13px;font-weight:600">Blank at position (blank/end = append)
-          <input type="text" data-f="blankAt" placeholder="e.g. 1" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-        </label>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button data-f="go">Apply & download</button>
-      </div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "pdf-add-remove-pages";
-  const trackedUrls = [];
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
+  page.optionsEl.innerHTML = `
+    <label>Password for source (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <label>Delete pages (e.g. 2, 4-5 — blank = keep all)
+      <input type="text" data-f="delete" placeholder="2, 4-5" />
+    </label>
+    <label>Insert from second PDF (optional)
+      <input type="file" data-f="insFile" accept="application/pdf,.pdf" />
+    </label>
+    <label>Password for insert PDF (if encrypted)
+      <input type="password" data-f="insPw" placeholder="Optional" />
+    </label>
+    <label>Insert pages (e.g. 1-2 — blank = all)
+      <input type="text" data-f="insRanges" placeholder="all" />
+    </label>
+    <label>Insert at position (1-based, blank/end = append)
+      <input type="text" data-f="insAt" placeholder="e.g. 3" />
+    </label>
+    <label>Blank pages to add
+      <input type="number" data-f="blankCount" min="0" max="100" value="0" />
+    </label>
+    <label>Blank at position (blank/end = append)
+      <input type="text" data-f="blankAt" placeholder="e.g. 1" />
+    </label>`;
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -60,16 +50,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
 
   async function loadPdfLib() {
     if (globalThis.PDFLib) return globalThis.PDFLib;
@@ -167,11 +148,11 @@ export async function mount(el, ctx = {}) {
     return Math.min(Math.max(p - 1, 0), count);
   }
 
-  const onGo = async () => {
+  page.runBtn("Apply & download", async (got) => {
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a source PDF first."); return; }
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -263,12 +244,12 @@ export async function mount(el, ctx = {}) {
       status(`Done — ${n} → ${out.getPageCount()} pages (deleted ${delIdx.length}, inserted ${inserted}, blank ${blankAdded}).${warnTxt} (100% client-side)`);
     } catch (e) { status("Error: " + (e?.message || e)); }
     finally { try { q("pw").value = ""; } catch {} try { q("insPw").value = ""; } catch {} }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { q("pw").value = ""; } catch {}
     try { q("insPw").value = ""; } catch {}
-    el.innerHTML = "";
+    try { q("insFile").value = ""; } catch {}
+    page.cleanup();
   };
 }

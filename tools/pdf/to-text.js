@@ -1,37 +1,56 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/to-text.js — extract selectable text via pdf.js getTextContent. Client-side only, no OCR.
+// tools/pdf/to-text.js — extract selectable text via pdf.js getTextContent. Client-side only, no OCR. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <p class="muted" style="margin:0;font-size:12px">Extracts the PDF&apos;s embedded (selectable) text only — no OCR. Scanned pages with no text layer are skipped.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button data-f="go">Extract text</button>
-        <button data-f="copy" disabled>Copy</button>
-        <button data-f="dl" disabled>Download .txt</button>
-      </div>
-      <label style="font-size:13px;font-weight:600">Extracted text
-        <textarea data-f="out" readonly placeholder="Extracted text appears here…" style="width:100%;min-height:220px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font:12px/1.5 monospace;white-space:pre-wrap"></textarea>
-      </label>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const setProgress = page.setProgress;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "pdf-to-text";
-  const trackedUrls = [];
+
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <p class="muted" style="margin:0;font-size:12px">Extracts the PDF&apos;s embedded (selectable) text only — no OCR. Scanned pages with no text layer are skipped.</p>`;
+
+  const outLabel = document.createElement("label");
+  outLabel.style.cssText = "font-size:13px;font-weight:600;display:grid;gap:6px";
+  outLabel.textContent = "Extracted text";
+  const outArea = document.createElement("textarea");
+  outArea.dataset.f = "out";
+  outArea.readOnly = true;
+  outArea.placeholder = "Extracted text appears here…";
+  outArea.style.cssText = "width:100%;min-height:220px;padding:8px;border:1px solid var(--line);border-radius:8px;font:12px/1.5 monospace;white-space:pre-wrap";
+  outLabel.append(outArea);
+  page.outputEl.append(outLabel);
+
+  const actionRow = document.createElement("div");
+  actionRow.className = "btnrow";
+  actionRow.style.marginTop = "0";
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "secondary";
+  copyBtn.dataset.f = "copy";
+  copyBtn.textContent = "Copy";
+  copyBtn.disabled = true;
+  const dlBtn = document.createElement("button");
+  dlBtn.type = "button";
+  dlBtn.className = "secondary";
+  dlBtn.dataset.f = "dl";
+  dlBtn.textContent = "Download .txt";
+  dlBtn.disabled = true;
+  actionRow.append(copyBtn, dlBtn);
+  page.outputEl.append(actionRow);
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   let pdfDoc = null;
   let lastName = "extracted.txt";
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function checkCaps(list, opts) {
     try {
       if (typeof ctx.checkFiles === "function") {
@@ -51,12 +70,7 @@ export async function mount(el, ctx = {}) {
   function saveText(text, filename) {
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     if (typeof ctx.download === "function") return ctx.download(blob, filename, "text/plain");
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
+    return page.addDownload(blob, filename, `Download ${filename}`);
   }
 
   async function loadPdfJs() {
@@ -99,11 +113,11 @@ export async function mount(el, ctx = {}) {
     }
   }
 
-  const onGo = async () => {
+  page.runBtn("Extract text", async (got) => {
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -122,8 +136,8 @@ export async function mount(el, ctx = {}) {
       const pages = [];
       for (let n = 1; n <= pdf.numPages; n++) {
         status(`Extracting page ${n}/${pdf.numPages}…`);
-        const page = await pdf.getPage(n);
-        const tc = await page.getTextContent();
+        const pg = await pdf.getPage(n);
+        const tc = await pg.getTextContent();
         const lines = [];
         let lastY = null;
         for (const it of (tc.items || [])) {
@@ -138,7 +152,8 @@ export async function mount(el, ctx = {}) {
           if (it.hasEOL) lines.push("\n");
         }
         pages.push(lines.join("").replace(/[ \t]+\n/g, "\n").trim());
-        try { page.cleanup(); } catch {}
+        try { pg.cleanup(); } catch {}
+        setProgress(n / pdf.numPages);
       }
       const text = pages.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
       try { q("pw").value = ""; } catch {}
@@ -153,7 +168,7 @@ export async function mount(el, ctx = {}) {
       status(`Done — extracted ${text.length.toLocaleString()} characters from ${pdf.numPages} page(s). Embedded text only, no OCR. (100% client-side)`);
     } catch (e) { status("Error: " + (e?.message || e)); }
     finally { try { q("pw").value = ""; } catch {} }
-  };
+  });
   const onCopy = async () => {
     try {
       const text = q("out").value || "";
@@ -177,14 +192,13 @@ export async function mount(el, ctx = {}) {
       status("Downloaded " + lastName + ".");
     } catch (e) { status("Error: " + (e?.message || e)); }
   };
-  q("go").addEventListener("click", onGo);
   q("copy").addEventListener("click", onCopy);
   q("dl").addEventListener("click", onDl);
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { if (pdfDoc && typeof pdfDoc.destroy === "function") pdfDoc.destroy(); } catch {}
     pdfDoc = null;
     try { q("pw").value = ""; } catch {}
-    el.innerHTML = "";
+    page.cleanup();
   };
 }

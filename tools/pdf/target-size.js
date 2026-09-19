@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com
-// tools/pdf/target-size.js — shrink PDF to ~1/2/5MB via raster JPEG quality loop.
+// tools/pdf/target-size.js — shrink PDF to ~1/2/5MB via raster JPEG quality loop. (P2 shell UI.)
+import { shell } from '../_lib/page.js';
 export async function mount(el, ctx = {}) {
-  el.innerHTML = `
-    <div style="display:grid;gap:10px">
-      <label style="font-size:13px;font-weight:600">Source PDF
-        <input type="file" data-f="file" accept="application/pdf,.pdf" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Password (if encrypted)
-        <input type="password" data-f="pw" placeholder="Optional" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px" />
-      </label>
-      <label style="font-size:13px;font-weight:600">Target size
-        <select data-f="preset" style="padding:8px;border:1px solid #e2e8f0;border-radius:8px">
-          <option value="1048576">~1 MB</option>
-          <option value="2097152" selected>~2 MB</option>
-          <option value="5242880">~5 MB</option>
-        </select>
-      </label>
-      <div style="font-size:12px;color:#64748b">Best-effort: rasterizes pages to JPEG, stepping quality down until under target (±30% tolerance, else warns with closest).</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button data-f="go">Shrink & download</button></div>
-      <div style="display:flex;gap:8px;align-items:center"><progress data-f="prog" max="100" value="0" style="flex:1;display:none"></progress><span data-f="pct" style="font-size:12px;color:#64748b"></span></div>
-      <div data-f="status" style="font-size:13px;color:#64748b"></div>
-    </div>`;
-  const q = (s) => el.querySelector(`[data-f="${s}"]`);
-  const status = (m) => { q("status").textContent = m; };
+  const tool = (ctx && ctx.tool) || {};
+  const page = shell(el, tool, ctx);
+  const status = page.status;
+  const setProgress = page.setProgress;
+  const q = (s) => page.root.querySelector(`[data-f="${s}"]`);
   const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "pdf-target-size";
-  const trackedUrls = [];
+
+  page.optionsEl.innerHTML = `
+    <label>Password (if encrypted)
+      <input type="password" data-f="pw" placeholder="Optional" />
+    </label>
+    <label>Target size
+      <select data-f="preset">
+        <option value="1048576">~1 MB</option>
+        <option value="2097152" selected>~2 MB</option>
+        <option value="5242880">~5 MB</option>
+      </select>
+    </label>
+    <p class="muted" style="margin:0;font-size:12px">Best-effort: rasterizes pages to JPEG, stepping quality down until under target (±30% tolerance, else warns with closest).</p>`;
+
+  let files = [];
+  page.onFiles((accepted) => { files = [...accepted]; });
+
   const liveCanvases = new Set();
   const RASTER_MAX_DESKTOP = 200;
   const RASTER_MAX_MOBILE = 50;
@@ -33,6 +33,10 @@ export async function mount(el, ctx = {}) {
   const RASTER_MAX_PIXELS = 16000000; // 16MP per page
   const RASTER_MIN_SCALE = 0.4;
 
+  function capsInfo(toolId) {
+    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
+    return null;
+  }
   function rasterDimCap(mobile) {
     try {
       const c = capsInfo(TOOL_ID);
@@ -41,10 +45,6 @@ export async function mount(el, ctx = {}) {
     return mobile ? 8000 : 12000;
   }
 
-  function capsInfo(toolId) {
-    try { if (typeof ctx.activeCaps === "function") return ctx.activeCaps(toolId); } catch {}
-    return null;
-  }
   function isMobileDevice() {
     try {
       const c = capsInfo(TOOL_ID);
@@ -78,16 +78,7 @@ export async function mount(el, ctx = {}) {
     } catch {}
     return null;
   }
-  function saveBytes(bytes, filename, mime = "application/pdf") {
-    if (typeof ctx.download === "function") return ctx.download(bytes, filename, mime);
-    const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    trackedUrls.push(url);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => { URL.revokeObjectURL(url); }, 5000);
-  }
+  function saveBytes(bytes, filename, mime = "application/pdf") { return ctx.download(bytes, filename, mime); }
   function clampScale(s, fallback = 1.5) {
     s = parseFloat(s);
     if (!Number.isFinite(s)) return fallback;
@@ -186,13 +177,13 @@ export async function mount(el, ctx = {}) {
     }
   }
 
-  const onGo = async () => {
+  page.runBtn("Shrink & download", async (got) => {
     let tmpCanvas = null;
     let pdfDoc = null;
     try {
-      const f = q("file").files[0];
+      files = [...(got || [])];
+      const f = files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo(TOOL_ID);
       const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
@@ -258,23 +249,21 @@ export async function mount(el, ctx = {}) {
         attempts.push({ scale: s, quality: a.quality });
       }
 
-      const prog = q("prog");
-      const pct = q("pct");
       let best = null; // smallest bytes so far
       let met = null; // first bytes meeting target
 
       for (let a = 0; a < attempts.length; a++) {
         const { scale, quality } = attempts[a];
         const out = await PDFDocument.create();
-        try { prog.style.display = ""; prog.max = String(pdf.numPages); prog.value = 0; pct.textContent = "0%"; } catch {}
+        setProgress((a / attempts.length) * 0.9);
         for (let i = 1; i <= pdf.numPages; i++) {
           try {
             status(`Attempt ${a + 1}/${attempts.length} (scale ${scale.toFixed(2)}, JPEG q${quality}) — page ${i}/${pdf.numPages}…`);
-            const page = await pdf.getPage(i);
+            const pg = await pdf.getPage(i);
             try {
               // Per-page pixel cap: downscale before render so huge pages
               // (e.g. A0 at scale 1.0) can't OOM the tab.
-              let viewport = page.getViewport({ scale });
+              let viewport = pg.getViewport({ scale });
               let vw = Math.floor(viewport.width);
               let vh = Math.floor(viewport.height);
               let pageScale = scale;
@@ -288,7 +277,7 @@ export async function mount(el, ctx = {}) {
                 if (!Number.isFinite(pageScale) || pageScale < RASTER_MIN_SCALE) {
                   throw new Error(`Page ${i}/${pdf.numPages} too large to rasterize safely (${vw}×${vh}px exceeds 16MP / ${maxDim}px cap). Try Split into smaller pages.`);
                 }
-                viewport = page.getViewport({ scale: pageScale });
+                viewport = pg.getViewport({ scale: pageScale });
                 vw = Math.floor(viewport.width);
                 vh = Math.floor(viewport.height);
                 if (vw * vh > RASTER_MAX_PIXELS || vw > maxDim || vh > maxDim || vw < 1 || vh < 1) {
@@ -302,13 +291,13 @@ export async function mount(el, ctx = {}) {
               tmpCanvas.height = vh;
               const c2d = tmpCanvas.getContext("2d");
               c2d.fillStyle = "#fff"; c2d.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height);
-              await page.render({ canvasContext: c2d, viewport }).promise;
+              await pg.render({ canvasContext: c2d, viewport }).promise;
               const dataUrl = tmpCanvas.toDataURL("image/jpeg", quality);
               const jpg = await out.embedJpg(dataUrl);
               const p = out.addPage([jpg.width, jpg.height]);
               p.drawImage(jpg, { x: 0, y: 0, width: jpg.width, height: jpg.height });
             } finally {
-              try { await page.cleanup?.(); } catch {}
+              try { await pg.cleanup?.(); } catch {}
             }
             // Canvas cleanup to free RAM.
             tmpCanvas.width = 0; tmpCanvas.height = 0;
@@ -321,7 +310,7 @@ export async function mount(el, ctx = {}) {
             }
             throw e;
           }
-          try { prog.value = i; pct.textContent = Math.round((i / pdf.numPages) * 100) + "%"; } catch {}
+          setProgress(((a + i / pdf.numPages) / attempts.length) * 0.9);
           await new Promise((r) => setTimeout(r, 0));
           if (i % 20 === 0) await new Promise((r) => setTimeout(r, 50));
         }
@@ -335,7 +324,7 @@ export async function mount(el, ctx = {}) {
       if (!chosen) throw new Error("Raster loop produced no output.");
       const outLabel = targetLabel.replace(/[^0-9a-z]+/gi, "");
       saveBytes(chosen.bytes, file.name.replace(/\.pdf$/i, "") + `-target-${outLabel}.pdf`, "application/pdf");
-      try { prog.value = prog.max; pct.textContent = "100%"; } catch {}
+      setProgress(1);
       if (met) {
         status(`Done — ${fmt(origLen)} → ${fmt(met.bytes.length)} (target ${targetLabel}, scale ${met.scale.toFixed(2)}, JPEG q${met.quality}).`);
       } else if (chosen.bytes.length <= target * 1.3) {
@@ -357,12 +346,11 @@ export async function mount(el, ctx = {}) {
       }
       tmpCanvas = null;
     }
-  };
-  q("go").addEventListener("click", onGo);
+  });
   return () => {
-    try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    files = [];
     try { liveCanvases.forEach((c) => { c.width = 0; c.height = 0; }); liveCanvases.clear(); } catch {}
     try { q("pw").value = ""; } catch {}
-    el.innerHTML = "";
+    page.cleanup();
   };
 }

@@ -91,6 +91,13 @@ export async function recognizeWith(image, worker, { onProgress } = {}) {
   return String(data?.text ?? '');
 }
 
+// Convenience wrapper: injected worker wins (tests), else lazy singleton
+// worker via ensureWorker (eng+hin fetched once, then cached).
+export async function recognize(image, { langs = DEFAULT_LANGS, worker = null, onProgress, onLog } = {}) {
+  const w = worker || await ensureWorker(langs, { onProgress, onLog });
+  return recognizeWith(image, w, { onProgress });
+}
+
 // Gate an image against device caps BEFORE any decode/OCR work.
 export function gateOcrFile(file, ctx = {}) {
   try {
@@ -192,11 +199,13 @@ export function mount(el, ctx = {}) {
     setBar(0);
     try {
       say('Loading engine / lang pack (once, then cached)…');
-      const text = await recognize(f, {
-        langs,
+      const onProgressCb = p => { if (p?.progress != null) setBar(p.progress); };
+      // Injected worker (tests via ctx.worker) wins; else lazy singleton.
+      const worker = ctx.worker || await ensureWorker(langs, {
         onLog: m => log(m),
-        onProgress: p => { if (p?.progress != null) setBar(p.progress); },
+        onProgress: onProgressCb,
       });
+      const text = await recognizeWith(f, worker, { onProgress: onProgressCb });
       lastText = text.trim();
       q('out').textContent = lastText || '(no text detected)';
       setBar(null);
@@ -235,6 +244,7 @@ export function mount(el, ctx = {}) {
     el.innerHTML = '';
   }
   cleanup.recognize = recognize;
+  cleanup.recognizeWith = recognizeWith;
   cleanup.ensureWorker = ensureWorker;
   cleanup.normalizeLangs = normalizeLangs;
   cleanup.langsKey = langsKey;
