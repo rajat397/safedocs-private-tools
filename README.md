@@ -3,14 +3,36 @@
 
 100% on-device PDF/image/PII tools, zero upload.
 
-## Features
+## Features (28 tools, 10 categories)
 
-- PDF tools: merge, split, compress, and sign preparation, all in the browser
-- Image tools: convert, resize, and compress without leaving your device
-- PII tools: detect and redact sensitive text locally
-- OCR: English + Hindi text extraction via on-device engine
-- ZIP tools: create and inspect archives locally
-- Video to GIF: lightweight on-device encoding, with opt-in fallback
+- PDF (11): Merge PDFs (try `join pdfs`), Split, Compress, Images → PDF,
+  PDF → Images, Protect, Watermark, Page numbers, Flatten, Reorder, Sign
+- Organize (3, new): Rotate PDF, Add / Remove pages, Extract pages
+- Compress (2, new): PDF to target size, Grayscale PDF
+- Convert (2, new): Text → PDF, PDF → Text
+- Security (2, new): Unlock / View PDF, Redact & burn
+- Image (3): Convert, EXIF inspector, Compress images
+- Privacy (2): Scrub metadata, Mask PII
+- Scan / Media / Files: OCR on-device (EN + HI), Video → GIF, ZIP files
+- Search: forgiving synonyms + fuzzy match (`join` → Merge, `black out`
+  → Redact, `decrypt` → Unlock, `shrink to 1MB` → Compress); no-match
+  shows closest suggestions, never a dead end
+- Recents: last 8 tools, tool ids + timestamps only — never filenames
+  or file bytes; private-mode failures are silent no-ops
+- Batch meter: read-only `N files · X MB of Y MB total` feedback from
+  `core/caps.js:batchMeter`; never changes accept/reject
+- Onboarding: one-time `Private by design` tour (`Got it` dismiss,
+  `safedocs:onboarded` flag); static 3-step card in `index.html` shell
+
+## Honesty notes (read before sharing)
+
+- Protect PDF is a basic deterrent, NOT encryption: it re-saves a
+  hint-only copy with a metadata label, clears the password field, and
+  warns in-tool. Anyone can still open the file. For real password
+  protection use qpdf / desktop tooling.
+- Redact & burn pixels are burned into a new image-only copy (original
+  text layer discarded). Open the COPY and visually confirm every box
+  before sharing.
 
 ## Privacy proof
 
@@ -24,6 +46,11 @@
 ## Limits
 
 - Large files are limited by device memory and browser storage
+  (desktop: 200 MB/file · 500 MB batch · 50 files; mobile: 50 MB/file ·
+  150 MB batch · 20 files; video: 300/100 MB; image dim: 12000/8000px)
+- 8 of 9 new tools inherit base caps; `pdf-redact-burn` tightens mobile
+  to 25 MB single / 100 MB total + page-count guard (100 desktop /
+  25 mobile) + 16 MP raster cap inside the tool
 - OCR accuracy depends on image quality; Hindi + English packs download once (~16MB cached)
 - Video fallback (~25MB) loads only with explicit consent, never automatically
 - See LIMITS.md and vendor/cdn-pins.js for pinned versions and sizes

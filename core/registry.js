@@ -8,7 +8,7 @@
  */
 
 export const TOOLS = [
-  { id: 'pdf-merge', name: 'Merge PDFs', desc: 'Combine PDFs into one, reorder pages.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: true },
+  { id: 'pdf-merge', name: 'Merge PDFs', desc: 'Combine PDFs into one, reorder pages.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: true, keywords: ['merge', 'combine', 'join', 'stitch', 'append', 'join pdfs', 'combine pdfs'], synonyms: ['join pdfs', 'combine pdfs', 'merge pdfs', 'stitch pdfs', 'append pdfs'] },
   { id: 'split', name: 'Split PDF', desc: 'Extract page ranges into new PDFs.', cat: 'PDF', accept: '.pdf,application/pdf' },
   { id: 'compress', name: 'Compress PDF', desc: 'Shrink PDF size, on-device.', cat: 'PDF', accept: '.pdf,application/pdf' },
   { id: 'images-to-pdf', name: 'Images → PDF', desc: 'Turn JPG / PNG / WebP photos into a PDF.', cat: 'PDF', accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: true },
@@ -27,6 +27,15 @@ export const TOOLS = [
   { id: 'video-gif', name: 'Video → GIF', desc: 'Trim & convert short clips to GIF.', cat: 'Media', accept: 'video/*,.mp4,.webm,.mov' },
   { id: 'sign', name: 'Sign PDF', desc: 'Draw or type a signature, place on pages.', cat: 'PDF', accept: '.pdf,application/pdf' },
   { id: 'zip', name: 'ZIP files', desc: 'Bundle files into a ZIP archive.', cat: 'Files', accept: '*/*', multiple: true },
+  { id: 'pdf-rotate', name: 'Rotate PDF', desc: 'Rotate pages 90° / 180°, fix sideways scans.', cat: 'Organize', accept: '.pdf,application/pdf', multiple: false, keywords: ['rotate', 'orientation', 'turn', 'sideways', 'landscape', 'portrait'], synonyms: ['turn pdf', 'rotate pages', 'fix orientation'] },
+  { id: 'pdf-add-remove-pages', name: 'Add / Remove pages', desc: 'Insert blank pages or delete unwanted pages.', cat: 'Organize', accept: '.pdf,application/pdf', multiple: false, keywords: ['add', 'remove', 'delete', 'insert', 'blank', 'pages'], synonyms: ['delete pages', 'insert pages', 'add blank page'] },
+  { id: 'pdf-extract-pages', name: 'Extract pages', desc: 'Save selected pages as a new PDF.', cat: 'Organize', accept: '.pdf,application/pdf', multiple: false, keywords: ['extract', 'split', 'select', 'range', 'pages'], synonyms: ['extract page', 'save pages', 'pull pages out'] },
+  { id: 'pdf-target-size', name: 'PDF to target size', desc: 'Compress PDF down to a target KB / MB size.', cat: 'Compress', accept: '.pdf,application/pdf', multiple: false, keywords: ['target', 'size', 'compress', 'shrink', 'kb', 'mb'], synonyms: ['shrink to size', 'compress to kb', 'reduce file size'] },
+  { id: 'pdf-grayscale', name: 'Grayscale PDF', desc: 'Convert PDF to black & white for print / ink saving.', cat: 'Compress', accept: '.pdf,application/pdf', multiple: false, keywords: ['grayscale', 'grey', 'gray', 'bw', 'black and white', 'ink'], synonyms: ['black and white', 'convert to gray', 'b&w pdf'] },
+  { id: 'text-to-pdf', name: 'Text → PDF', desc: 'Turn .txt / .md text into a PDF.', cat: 'Convert', accept: '.txt,.md,.csv,text/plain', multiple: false, keywords: ['text', 'txt', 'markdown', 'md', 'to pdf', 'create'], synonyms: ['txt to pdf', 'md to pdf', 'make pdf from text'] },
+  { id: 'pdf-to-text', name: 'PDF → Text', desc: 'Extract selectable text from a PDF to .txt.', cat: 'Convert', accept: '.pdf,application/pdf', multiple: false, keywords: ['extract text', 'to text', 'txt', 'selectable', 'copy'], synonyms: ['pdf to txt', 'get text out', 'extract words'] },
+  { id: 'pdf-unlock-view', name: 'Unlock / View PDF', desc: 'Open password-protected PDFs you own for viewing.', cat: 'Security', accept: '.pdf,application/pdf', multiple: false, keywords: ['unlock', 'decrypt', 'password', 'remove password', 'view'], synonyms: ['decrypt pdf', 'remove password', 'open locked pdf'] },
+  { id: 'pdf-redact-burn', name: 'Redact & burn', desc: 'Permanently black-out text regions (burned in, not overlay).', cat: 'Security', accept: '.pdf,application/pdf', multiple: false, keywords: ['redact', 'burn', 'black out', 'permanent', 'censor', 'privacy'], synonyms: ['black out text', 'burn redactions', 'permanent redact'] },
 ];
 
 const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
@@ -39,6 +48,9 @@ const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
  *   tools/image/{exif-remove,compress,convert}.js
  *   tools/pii/redact.js, tools/ocr/index.js, tools/video/index.js,
  *   tools/sign/index.js, tools/zip/index.js
+ * MVP-1 T01 additions (all under tools/pdf/ to avoid new dirs):
+ *   tools/pdf/{rotate,add-remove-pages,extract-pages,target-size,
+ *     grayscale,text-to-pdf,to-text,unlock-view,redact-burn}.js
  */
 const MODULES = {
   'pdf-merge': './tools/pdf/merge.js',
@@ -60,6 +72,15 @@ const MODULES = {
   'video-gif': './tools/video/index.js',
   sign: './tools/sign/index.js',
   zip: './tools/zip/index.js',
+  'pdf-rotate': './tools/pdf/rotate.js',
+  'pdf-add-remove-pages': './tools/pdf/add-remove-pages.js',
+  'pdf-extract-pages': './tools/pdf/extract-pages.js',
+  'pdf-target-size': './tools/pdf/target-size.js',
+  'pdf-grayscale': './tools/pdf/grayscale.js',
+  'text-to-pdf': './tools/pdf/text-to-pdf.js',
+  'pdf-to-text': './tools/pdf/to-text.js',
+  'pdf-unlock-view': './tools/pdf/unlock-view.js',
+  'pdf-redact-burn': './tools/pdf/redact-burn.js',
 };
 
 /** Exact module URL for one tool (accepts id string or tool object). */
@@ -77,11 +98,67 @@ export function categories() {
   return [...new Set(TOOLS.map((t) => t.cat))];
 }
 
+/**
+ * Query alias → canonical term expansion so search is forgiving
+ * (e.g. "decrypt" finds unlock, "bw" finds grayscale).
+ * Applied as substring match: if the query contains the alias,
+ * the canonical term is also matched against the tool haystack.
+ * No new CDN; metadata only.
+ */
+const QUERY_SYNONYMS = {
+  join: 'merge',
+  merge: 'merge',
+  combine: 'merge',
+  stitch: 'merge',
+  append: 'merge',
+  'join pdfs': 'merge',
+  'combine pdfs': 'merge',
+  turn: 'rotate',
+  orientation: 'rotate',
+  sideways: 'rotate',
+  delete: 'remove',
+  drop: 'remove',
+  insert: 'add',
+  blank: 'add',
+  pull: 'extract',
+  shrink: 'compress',
+  reduce: 'compress',
+  smaller: 'compress',
+  kb: 'target',
+  mb: 'target',
+  grey: 'grayscale',
+  gray: 'grayscale',
+  bw: 'grayscale',
+  'b&w': 'grayscale',
+  ink: 'grayscale',
+  txt: 'text',
+  markdown: 'text',
+  decrypt: 'unlock',
+  locked: 'unlock',
+  password: 'unlock',
+  censor: 'redact',
+  'black out': 'redact',
+  blackout: 'redact',
+  burn: 'redact',
+  permanent: 'redact',
+};
+
 export function searchTools(q) {
   const s = (q || '').trim().toLowerCase();
   if (!s) return TOOLS;
-  return TOOLS.filter(
-    (t) => t.id.includes(s) || t.name.toLowerCase().includes(s)
-      || t.desc.toLowerCase().includes(s) || t.cat.toLowerCase().includes(s),
-  );
+  const terms = [s];
+  for (const [alias, canonical] of Object.entries(QUERY_SYNONYMS)) {
+    if (s.includes(alias) && !terms.includes(canonical)) terms.push(canonical);
+  }
+  return TOOLS.filter((t) => {
+    const hay = [
+      t.id,
+      t.name,
+      t.desc,
+      t.cat,
+      ...((t.keywords || [])),
+      ...((t.synonyms || [])),
+    ].join(' ').toLowerCase();
+    return terms.some((term) => hay.includes(term));
+  });
 }

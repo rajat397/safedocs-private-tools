@@ -15,6 +15,10 @@ export const CAPS = {
 export const TOOL_CAPS = {
   'video-gif': { mobile: { maxSingleMB: 100, maxTotalMB: 150 } },
   ocr: { mobile: { maxSingleMB: 25, maxTotalMB: 100 } },
+  // MVP-1 T06: raster burn rasterizes full pages into bitmaps (RAM spike on
+  // phones), same guard class as ocr. All other new tools inherit base caps
+  // (no entry needed — activeCaps falls through to CAPS).
+  'pdf-redact-burn': { mobile: { maxSingleMB: 25, maxTotalMB: 100 } },
 };
 
 export function isMobile() {
@@ -83,4 +87,23 @@ export function checkFiles(files, { toolId = '', accept = '*/*', multiple = true
     accepted.push(f);
   }
   return { ok: rejected.length === 0 && accepted.length > 0, accepted, rejected, caps };
+}
+
+/**
+ * Batch meter data for a checkFiles result (MVP-1 T06).
+ * Pure derivation — accepted bytes vs the active total cap — so the dropzone
+ * can render a usage bar. Read-only: never mutates the result.
+ * Returns { count, acceptedBytes, acceptedMB, capMB, mobile, frac } where
+ * frac is acceptedMB / capMB clamped to [0, 1] (0 when capMB is missing).
+ */
+export function batchMeter(result) {
+  const accepted = result?.accepted || [];
+  const caps = result?.caps || {};
+  const capMB = Number.isFinite(caps.maxTotalMB) ? caps.maxTotalMB : 0;
+  const acceptedBytes = accepted.reduce(
+    (sum, f) => sum + (Number.isFinite(f?.size) ? f.size : 0), 0,
+  );
+  const acceptedMB = acceptedBytes / (1024 * 1024);
+  const frac = capMB > 0 ? Math.max(0, Math.min(1, acceptedMB / capMB)) : 0;
+  return { count: accepted.length, acceptedBytes, acceptedMB, capMB, mobile: !!caps.mobile, frac };
 }

@@ -62,6 +62,31 @@ python3 -m http.server 8000
 - Tool modules MUST NOT add analytics, tracking pixels, or font loads.
   `vendor/*` holds only the pin manifest (`cdn-pins.js`) for this reason.
 
+## Recents (tool ids only)
+
+"Recently used" remembers **tool ids + timestamps only** —
+`core/recents.js` stores `[{ id, ts }]` (max 8) under
+`localStorage` key `safedocs:recents`. It never stores filenames, file
+bytes, previews, or other PII; entries are projected to `{ id, ts }` on
+read so stale/foreign shapes can't leak anything. All storage access is
+try/catch, so private-mode denials are non-fatal no-ops. The home grid
+maps ids back to known tools via the registry and drops unknown ids.
+
+## Honesty notes (what tools do NOT promise)
+
+- **Protect PDF is a basic deterrent, not encryption.** `pdf-lib` cannot
+  do real password encryption client-side, so `tools/pdf/protect.js`
+  re-saves a hint-only copy (protection hint in metadata, e.g.
+  `toolbox-protect(hint-only, not encrypted)`), clears both password
+  fields immediately, and warns in-tool: anyone can still open the file
+  without a password. For real password protection use a desktop step
+  (e.g. `qpdf`).
+- **Redact-Burn pixels are burned, not overlaid.** `tools/pdf/redact-burn.js`
+  rasterizes each page, `fillRect`s your boxes to opaque black pixels,
+  and rebuilds an **image-only copy** (`-redacted.pdf`) — the original
+  text layer is discarded, no vector/text survives underneath. Always
+  open the COPY and visually confirm every box before sharing.
+
 ## Reporting
 
 If you ever see a POST with file bytes in DevTools while using the toolbox,

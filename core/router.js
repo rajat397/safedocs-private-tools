@@ -7,17 +7,100 @@
  *
  * Tool module contract (owned by tools/* builders):
  *   export async function mount(rootEl, ctx) -> cleanupFn | void
- *   ctx = { tool, createDropzone, caps utils, helpers }
+ *   ctx = { tool, createDropzone, checkFiles, activeCaps, baseUrl, download, isMobile }
  */
-import { TOOLS, getTool, searchTools, moduleCandidates } from './registry.js';
-import { escapeHtml, fmtBytes } from './utils.js';
+import { TOOLS, getTool, searchTools, categories, moduleCandidates } from './registry.js';
+import { list as listRecents } from './recents.js';
+import { escapeHtml, fmtBytes, download } from './utils.js';
 import { createDropzone } from './dropzone.js';
-import { checkFiles, activeCaps } from './caps.js';
+import { checkFiles, activeCaps, isMobile } from './caps.js';
 
 let cleanup = null;
 function runCleanup() {
   try { cleanup?.(); } catch { /* ignore */ }
   cleanup = null;
+}
+
+// --- Home state (module-private; renderHome(view, query) signature unchanged) ---
+let activeCat = 'All';
+const ONBOARD_KEY = 'safedocs:onboarded';
+
+/** Canonical category list: single source is registry categories(). */
+function allCats() {
+  return ['All', ...categories()];
+}
+
+/**
+ * Resolve a header chip value (legacy data-q / data-cat / label) to a
+ * canonical category name. Case-insensitive; 'zip' is an alias of 'Files'.
+ * Returns 'All' for empty values, null when unresolvable.
+ */
+function resolveCat(raw) {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s || s === 'all') return 'All';
+  if (s === 'zip') return 'Files';
+  const cats = allCats();
+  const hit = cats.find((c) => c.toLowerCase() === s);
+  return hit || null;
+}
+
+/**
+ * M1+M4: if a header nav (header .chip[data-q]) exists, wire it to the same
+ * activeCat filter as the in-view [data-cat] chips and keep aria-pressed
+ * in sync. No-op when the header nav was removed (single-source in-view
+ * chips remain the filter UI). Never throws.
+ */
+function syncHeaderChips(view) {
+  try {
+    const headerChips = document.querySelectorAll('header .chip[data-q], .chips .chip[data-q], header [data-cat]');
+    if (!headerChips.length) return;
+    headerChips.forEach((btn) => {
+      const target = resolveCat(btn.dataset.cat ?? btn.dataset.q ?? btn.textContent);
+      if (target) btn.dataset.cat = target;
+      const isActive = target === activeCat;
+      btn.setAttribute('aria-pressed', String(isActive));
+      btn.classList.toggle('is-active', isActive);
+      if (!btn.dataset.wired) {
+        btn.dataset.wired = '1';
+        btn.addEventListener('click', () => {
+          const next = resolveCat(btn.dataset.cat ?? btn.dataset.q ?? btn.textContent);
+          if (!next) return;
+          activeCat = next;
+          if ((location.hash || '#/') !== '#/') location.hash = '#/';
+          else renderHome(view, document.getElementById('search')?.value || '');
+        });
+      }
+    });
+  } catch { /* ignore */ }
+}
+
+function isOnboarded() {
+  try {
+    if (typeof localStorage === 'undefined') return true;
+    return localStorage.getItem(ONBOARD_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Read-only use of core/recents.js: list() only, mapped to known tools. Never throws. */
+function getRecentTools() {
+  try {
+    const entries = listRecents();
+    if (!Array.isArray(entries)) return [];
+    const seen = new Set();
+    const out = [];
+    for (const e of entries) {
+      const id = e?.id;
+      if (typeof id !== 'string' || !id || seen.has(id)) continue;
+      seen.add(id);
+      const t = getTool(id);
+      if (t) out.push(t);
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 export function initRouter({ view, search }) {
@@ -52,20 +135,75 @@ async function route(view) {
 
 export function renderHome(view, query = '') {
   runCleanup();
+  const cats = allCats();
+  if (!cats.includes(activeCat)) activeCat = 'All';
   const tools = searchTools(query);
-  const cards = tools.map((t) => `
+  const filtered = activeCat === 'All' ? tools : tools.filter((t) => t.cat === activeCat);
+  const recentTools = getRecentTools();
+  const showOnboard = !isOnboarded();
+
+  const chips = cats.map((c) => `
+    <button type="button" class="pill ${c === activeCat ? 'blue' : 'grey'}" style="border:0;cursor:pointer"
+      data-cat="${escapeHtml(c)}" aria-pressed="${c === activeCat}">${escapeHtml(c)}</button>`).join('');
+
+  const cards = filtered.map((t) => `
     <a class="card" href="#/${t.id}">
       <span class="cat">${escapeHtml(t.cat)}</span>
       <h3>${escapeHtml(t.name)}</h3>
       <p>${escapeHtml(t.desc)}</p>
     </a>`).join('');
+
+  const recents = recentTools.length ? `
+    <section class="card" id="home-recents" aria-label="Recently used">
+      <h3 style="margin:0 0 8px">Recently used</h3>
+      <div class="btnrow" style="margin-top:0">${recentTools.map((t) => `
+        <a class="btn secondary" href="#/${t.id}">${escapeHtml(t.name)}</a>`).join('')}</div>
+    </section>` : '';
+
   view.innerHTML = `
+    ${showOnboard ? `
+    <section class="card" id="home-onboard" aria-label="Welcome">
+      <h2 style="margin:0">Private by design 🔒</h2>
+      <p class="muted" style="margin:8px 0 0">1-minute tour — everything below runs in your browser:</p>
+      <ul style="margin:8px 0 0;padding-left:20px;font-size:14px">
+        <li>Files never leave this device — airplane mode still works.</li>
+        <li>Pick a category or search to find a tool.</li>
+        <li>Recents remember tool names only, never your files.</li>
+      </ul>
+      <div class="btnrow"><button type="button" id="onboard-dismiss">Got it</button></div>
+    </section>` : ''}
     <section class="card">
       <h2 style="margin:0">Toolbox <span class="muted">· ${TOOLS.length} tools</span></h2>
       <p class="muted" style="margin:8px 0 0">Everything runs in your browser. Turn on airplane mode — it still works.</p>
     </section>
+    ${recents}
+    <div class="btnrow" role="group" aria-label="Filter by category">${chips}</div>
     <div class="tool-grid">${cards}</div>
-    ${tools.length === 0 ? '<p class="empty">No tools match. Try “pdf”, “image”, “zip”…</p>' : ''}`;
+    ${filtered.length === 0 ? '<p class="empty">No tools match. Try “pdf”, “image”, “zip”…</p>' : ''}`;
+
+  view.querySelectorAll('[data-cat]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeCat = resolveCat(btn.dataset.cat) || 'All';
+      renderHome(view, document.getElementById('search')?.value || '');
+    });
+  });
+
+  view.querySelector('#onboard-dismiss')?.addEventListener('click', () => {
+    try { localStorage.setItem(ONBOARD_KEY, '1'); } catch { /* private-mode: session-only dismiss */ }
+    view.querySelector('#home-onboard')?.remove();
+  });
+
+  // M1+M4: keep header chips (if present) on the same canonical filter.
+  syncHeaderChips(view);
+  // M2: no dead batch/preview slots on home — per-tool dropzones own their
+  // meter + thumbnails, so there is nothing to listen for here.
+  cleanup = null;
+}
+
+/** Shell mount contract: mount(rootEl, ctx) -> cleanup. Home-only entry. */
+export function mount(rootEl, ctx = {}) {
+  renderHome(rootEl, ctx.query ?? document.getElementById('search')?.value ?? '');
+  return () => runCleanup();
 }
 
 async function tryImportTool(tool) {
@@ -146,6 +284,8 @@ async function renderTool(view, tool) {
     checkFiles,
     activeCaps,
     baseUrl: url.slice(0, url.lastIndexOf('/') + 1),
+    download,
+    isMobile,
   };
   try {
     const maybeCleanup = await mod.mount(root, ctx);

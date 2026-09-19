@@ -22,6 +22,7 @@ export async function mount(el, ctx = {}) {
     </div>`;
   const q = (s) => el.querySelector(`[data-f="${s}"]`);
   const status = (m) => { q("status").textContent = m; };
+  const TOOL_ID = (ctx && ctx.tool && ctx.tool.id) || "protect";
   const trackedUrls = [];
 
   function capsInfo(toolId) {
@@ -91,8 +92,8 @@ export async function mount(el, ctx = {}) {
     try {
       const f = q("file").files[0];
       if (!f) { status("Pick a PDF."); return; }
-      capsInfo("protect");
-      const chk = checkCaps([f], { toolId: "protect", accept: ".pdf,application/pdf", multiple: false });
+      capsInfo(TOOL_ID);
+      const chk = checkCaps([f], { toolId: TOOL_ID, accept: ".pdf,application/pdf", multiple: false });
       const file = (chk && chk.accepted && chk.accepted.length) ? chk.accepted[0] : f;
       if (chk && chk.accepted && !chk.accepted.length) return;
       if (!q("pw").value) { status("Enter a hint label (it will NOT protect the file — see warning)."); return; }
@@ -113,10 +114,13 @@ export async function mount(el, ctx = {}) {
       try { q("srcpw").value = ""; } catch {}
       status("Done — hint-only copy saved (NOT encrypted; warning above applies). Password fields cleared.");
     } catch (e) { status("Error: " + (e?.message || e)); }
+    finally { try { q("pw").value = ""; } catch {} try { q("srcpw").value = ""; } catch {} }
   };
   q("go").addEventListener("click", onGo);
   return () => {
     try { trackedUrls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+    try { q("pw").value = ""; } catch {}
+    try { q("srcpw").value = ""; } catch {}
     el.innerHTML = "";
   };
 }

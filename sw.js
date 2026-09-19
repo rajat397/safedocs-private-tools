@@ -4,7 +4,7 @@
  * Same-origin GETs are cached freely; cross-origin GETs are cached ONLY for
  * the pinned library CDNs in vendor/cdn-pins.js (js/traineddata, no file
  * bytes). See PRIVACY.md "Exceptions" for the offline-limit note. */
-const VERSION = 'toolbox-shell-v2';
+const VERSION = 'toolbox-shell-v3';
 const PRECACHE = [
   './',
   './index.html',
@@ -17,6 +17,8 @@ const PRECACHE = [
   './core/privacy.js',
   './core/utils.js',
   './core/caps.js',
+  './core/search.js',
+  './core/recents.js',
 ];
 
 self.addEventListener('install', (e) => {

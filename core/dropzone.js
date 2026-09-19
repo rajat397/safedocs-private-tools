@@ -4,7 +4,7 @@
  * Reusable file dropzone. Drag & drop + click-to-browse + keyboard.
  * Files stay in memory — this module performs zero network I/O.
  */
-import { checkFiles } from './caps.js';
+import { checkFiles, batchMeter } from './caps.js';
 import { fmtBytes, escapeHtml } from './utils.js';
 
 export function createDropzone({
@@ -24,6 +24,7 @@ export function createDropzone({
   root.innerHTML = `
     <div class="dz-title">${escapeHtml(label)}</div>
     <div class="dz-sub">${escapeHtml(sub)}</div>
+    <div class="meter-wrap" hidden><div class="meter-label"></div><div class="meter"><div class="meter-fill"></div></div></div>
     <ul class="filelist" hidden></ul>`;
 
   const input = document.createElement('input');
@@ -34,7 +35,19 @@ export function createDropzone({
   root.append(input);
 
   const list = root.querySelector('.filelist');
+  const meterWrap = root.querySelector('.meter-wrap');
+  const meterLabel = root.querySelector('.meter-label');
+  const meterFill = root.querySelector('.meter-fill');
   let dragDepth = 0;
+
+  function renderMeter(result) {
+    const m = batchMeter(result);
+    const show = m.count > 0 && m.capMB > 0;
+    meterWrap.hidden = !show;
+    if (!show) return;
+    meterLabel.textContent = `${m.count} file${m.count === 1 ? '' : 's'} · ${fmtBytes(m.acceptedBytes)} of ${m.capMB} MB total`;
+    meterFill.style.width = `${m.frac * 100}%`;
+  }
 
   function renderSelection(result) {
     const items = [
@@ -43,6 +56,7 @@ export function createDropzone({
     ];
     list.hidden = items.length === 0;
     list.innerHTML = items.join('');
+    renderMeter(result);
   }
 
   function handle(raw) {
