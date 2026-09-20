@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 | Copyright (c) 2026 Rajat Srivastava — Commercial use: contact rajat242003@gmail.com -->
-# Limits (34 tools)
+# Limits (38 tools)
 
 Caps keep tools fast and crash-free, especially on phones. Enforced in
 `core/caps.js:checkFiles` (via `core/dropzone.js`); tools must not accept
-files the dropzone rejected without re-validating. All 34 registry tools
-inherit the base profile below except the three `TOOL_CAPS` overrides.
+files the dropzone rejected without re-validating. All 38 registry tools
+inherit the base profile below except the `TOOL_CAPS` overrides.
 
 ## Profiles
 
@@ -26,8 +26,12 @@ Mobile = `(pointer: coarse)` match, mobile UA, or viewport < 768px
 | `video-gif` | mobile: 100 MB single / 150 MB total (GIF encode is memory-heavy) |
 | `ocr`       | mobile: 25 MB single / 100 MB total (on-device model RAM) |
 | `pdf-redact-burn` | mobile: 25 MB single / 100 MB total (raster burn holds full-page bitmaps in RAM) |
+| `image-bgremove` | mobile: 25 MB single / 100 MB total / max 4096px (AI model RAM) |
+| `image-upscale` | mobile: 25 MB single / 100 MB total / max 2048px input (AI model RAM) |
+| `image-colorize` | mobile: 25 MB single / 100 MB total / max 2048px input (AI model RAM) |
+| `image-vectorize` | mobile: 10 MB single / 50 MB total / max 2048px input (WASM trace) |
 
-All other MVP-1 tools inherit the base profile above (no `TOOL_CAPS` entry:
+All other tools inherit the base profile above (no `TOOL_CAPS` entry:
 `activeCaps` falls through to `CAPS`). Add an override here only with a
 measured RAM / CPU reason, same change as the `core/caps.js` edit.
 
@@ -51,6 +55,14 @@ measured RAM spike beyond the base caps). Tool-level guards, not
 `checkFiles` caps: 500-page cap inside every tool; `pdf-extract-images`
 additionally caps downloads at the first 100 images per run (re-run on
 page ranges for the rest) since each image triggers a separate download.
+
+### 4 new tools (Image Tools MVP)
+
+`image-bgremove`, `image-upscale`, `image-colorize`, `image-vectorize`
+have per-tool overrides above (AI/WASM model RAM). Each tool enforces
+a 50 MB/model mobile cap via the model loader (OPFS cache), and uses
+tiled inference where applicable. Desktop inherits base caps with
+`maxImageDim` limits per tool.
 
 ## Batch meter
 

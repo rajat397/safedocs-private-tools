@@ -41,8 +41,27 @@ export const TOOLS = [
   { id: 'pdf-crop', name: 'Crop PDF', desc: 'Trim page margins via CropBox (vector, reversible).', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['crop', 'trim', 'margin', 'margins', 'cut', 'cropbox'], synonyms: ['crop pdf', 'trim margins', 'cut margins'] },
   { id: 'pdf-extract-images', name: 'Extract images', desc: 'Save embedded JPEG images from a PDF, no re-encode.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['extract', 'images', 'pictures', 'photos', 'jpeg', 'jpg', 'embedded'], synonyms: ['extract images', 'get pictures out', 'save images'] },
   { id: 'pdf-remove-annotations', name: 'Remove annotations', desc: 'Strip comments, links & markup; keeps page text.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['annotations', 'comments', 'markup', 'links', 'notes', 'highlight', 'strip'], synonyms: ['remove comments', 'strip annotations', 'delete markup'] },
+  { id: 'pdf-watermark', name: 'Watermark PDF', desc: 'Add text or image watermark with opacity, rotation, position.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['watermark', 'stamp', 'text', 'image', 'opacity', 'rotation', 'diagonal'], synonyms: ['add watermark', 'stamp pdf', 'watermark pages'] },
+  { id: 'pdf-page-numbers', name: 'Page numbers', desc: 'Add page numbers with format, position, start number, prefix/suffix.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['page numbers', 'paginate', 'bates', 'number pages', 'page numbering'], synonyms: ['add page numbers', 'number pdf pages', 'bates stamp'] },
+  { id: 'pdf-flatten-annots', name: 'Flatten annotations & forms', desc: 'Flatten annotations and form fields into page content (vector, non-interactive).', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['flatten', 'annotations', 'forms', 'fields', 'non-interactive', 'widget'], synonyms: ['flatten annotations', 'flatten forms', 'make non-interactive'] },
+  { id: 'pdf-a-compliance', name: 'PDF/A compliance', desc: 'Add PDF/A-1b/2b/3b metadata, sRGB output intent, embed fonts, validation report.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['pdf/a', 'pdfa', 'compliance', 'archival', 'iso 19005', 'output intent', 'xmp'], synonyms: ['pdf/a compliance', 'make pdf/a', 'archival pdf'] },
   { id: 'pdf-n-up', name: 'N-up PDF', desc: 'Combine 2 or 4 pages per sheet for printing.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['n-up', 'nup', '2-up', '4-up', 'impose', 'imposition', 'booklet', 'sheet', 'print'], synonyms: ['2 up', '4 up', 'pages per sheet', 'impose pdf'] },
   { id: 'pdf-compare', name: 'Compare PDFs', desc: 'Side-by-side page comparison of two PDFs.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['compare', 'diff', 'side-by-side', 'pages', 'visual'], synonyms: ['pdf diff', 'compare pdfs', 'side by side'] },
+  { id: 'image-bgremove', name: 'Remove background', desc: 'AI background removal, 100% on-device.', cat: 'Image', accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: false, keywords: ['background', 'remove', 'transparent', 'cutout', 'isolate', 'subject'], synonyms: ['remove background', 'bg removal', 'transparent background', 'cut out subject'] },
+  { id: 'image-upscale', name: 'Upscale image (AI)', desc: '2× / 4× AI upscaling, on-device.', cat: 'Image', accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: false, keywords: ['upscale', 'enlarge', 'super resolution', '2x', '4x', 'enhance'], synonyms: ['upscale image', 'enlarge photo', 'super resolution', '2x upscale', '4x upscale'] },
+  { id: 'image-colorize', name: 'Colorize photo', desc: 'Add color to B&W photos, on-device.', cat: 'Image', accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: false, keywords: ['colorize', 'colourise', 'b&w', 'black and white', 'restore', 'old photo'], synonyms: ['colorize photo', 'add color', 'restore old photo', 'b&w to color'] },
+  { id: 'image-vectorize', name: 'Vectorize image', desc: 'Trace bitmap to SVG, on-device.', cat: 'Image', accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: false, keywords: ['vectorize', 'trace', 'svg', 'bitmap to vector', 'outline'], synonyms: ['vectorize image', 'trace to svg', 'bitmap to vector', 'image to svg'] },
+  { id: 'pdf-edit-content', name: 'Edit PDF Content', desc: 'Edit text and images directly in a PDF.', cat: 'PDF', accept: '.pdf,application/pdf', multiple: false, keywords: ['edit', 'content', 'text', 'images', 'modify'], synonyms: ['edit pdf', 'edit content', 'modify pdf'] },
+  { id: 'pdf-fill-form', name: 'Fill PDF Form', desc: 'Fill interactive PDF form fields.', cat: 'Forms', accept: '.pdf,application/pdf', multiple: false, keywords: ['fill', 'form', 'fields', 'acroform', 'complete'], synonyms: ['fill form', 'complete form', 'fill pdf form'] },
+  { id: 'pdf-create-form', name: 'Create PDF Form', desc: 'Add fillable fields to create a PDF form.', cat: 'Forms', accept: '.pdf,application/pdf', multiple: false, keywords: ['create', 'form', 'fields', 'fillable', 'acroform'], synonyms: ['create form', 'make form', 'add form fields'] },
+  { id: 'pdf-gst-invoice', name: 'GST Invoice', desc: 'India GST tax invoice with CGST/SGST vs IGST, HSN, amount-in-words.', cat: 'Templates', accept: '.json,application/json', multiple: false, keywords: ['gst', 'invoice', 'india', 'tax', 'hsn', 'cgst', 'sgst', 'igst'], synonyms: ['gst invoice', 'tax invoice', 'india invoice'] },
+  { id: 'pdf-pos-billing', name: 'POS Billing', desc: 'Thermal POS bill (58/80mm) with GST, discount, UPI.', cat: 'Templates', accept: '.json,application/json', multiple: false, keywords: ['pos', 'billing', 'bill', 'thermal', 'receipt', 'gst', 'upi'], synonyms: ['pos bill', 'thermal receipt', 'pos billing'] },
+  { id: 'pdf-camera', name: 'Camera to PDF', desc: 'Capture pages via camera or upload images into a PDF.', cat: 'Capture', accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: true, keywords: ['camera', 'scan', 'capture', 'photo', 'page'], synonyms: ['camera to pdf', 'scan with camera', 'capture pages'] },
+  { id: 'pdf-ocr-layer', name: 'Searchable PDF OCR', desc: 'Add invisible OCR text layer (eng+hin) to make scans searchable.', cat: 'Scan', accept: 'image/*,.jpg,.jpeg,.png,.webp,.pdf,application/pdf', multiple: false, keywords: ['ocr', 'searchable', 'text layer', 'scan', 'eng', 'hin'], synonyms: ['searchable pdf', 'ocr pdf', 'text layer'] },
+  { id: 'pdf-to-docx', name: 'PDF to Word', desc: 'Convert PDF to editable Word .docx.', cat: 'Convert', accept: '.pdf,application/pdf', multiple: false, keywords: ['pdf', 'docx', 'word', 'doc', 'convert'], synonyms: ['pdf to word', 'pdf to docx', 'convert pdf to word'] },
+  { id: 'pdf-to-xlsx', name: 'PDF to Excel', desc: 'Extract tables from PDF to Excel .xlsx.', cat: 'Convert', accept: '.pdf,application/pdf', multiple: false, keywords: ['pdf', 'xlsx', 'excel', 'tables', 'spreadsheet', 'convert'], synonyms: ['pdf to excel', 'pdf to xlsx', 'pdf tables to excel'] },
+  { id: 'pdf-to-pptx', name: 'PDF to PPT', desc: 'Convert PDF pages to PowerPoint .pptx.', cat: 'Convert', accept: '.pdf,application/pdf', multiple: false, keywords: ['pdf', 'pptx', 'powerpoint', 'slides', 'presentation', 'convert'], synonyms: ['pdf to ppt', 'pdf to pptx', 'pdf to powerpoint'] },
+  { id: 'image-heic-support', name: 'HEIC / AVIF to PDF', desc: 'Convert iPhone HEIC / AVIF photos to PDF.', cat: 'Convert', accept: 'image/*,.heic,.heif,.avif', multiple: true, keywords: ['heic', 'heif', 'avif', 'iphone', 'convert', 'pdf'], synonyms: ['heic to pdf', 'avif to pdf', 'iphone photo to pdf'] },
 ];
 
 const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
@@ -61,6 +80,9 @@ const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));
  * P3A additions (pdf-lib only, same dir):
  *   tools/pdf/{metadata-edit,split-by-size,crop,extract-images,
  *     remove-annotations,n-up}.js
+ * Image Tools MVP (new dirs):
+ *   tools/image-bgremove/index.js, tools/image-upscale/index.js,
+ *   tools/image-colorize/index.js, tools/image-vectorize/index.js
  */
 const MODULES = {
   'pdf-merge': './tools/pdf/merge.js',
@@ -96,8 +118,27 @@ const MODULES = {
   'pdf-crop': './tools/pdf/crop.js',
   'pdf-extract-images': './tools/pdf/extract-images.js',
   'pdf-remove-annotations': './tools/pdf/remove-annotations.js',
+  'pdf-watermark': './tools/pdf/watermark.js',
+  'pdf-page-numbers': './tools/pdf/page-numbers.js',
+  'pdf-flatten-annots': './tools/pdf/flatten-annots.js',
+  'pdf-a-compliance': './tools/pdf/a-compliance.js',
   'pdf-n-up': './tools/pdf/n-up.js',
   'pdf-compare': './tools/compare/index.js',
+  'image-bgremove': './tools/image-bgremove/index.js',
+  'image-upscale': './tools/image-upscale/index.js',
+  'image-colorize': './tools/image-colorize/index.js',
+  'image-vectorize': './tools/image-vectorize/index.js',
+  'pdf-edit-content': './tools/pdf/edit-content.js',
+  'pdf-fill-form': './tools/pdf/fill-form.js',
+  'pdf-create-form': './tools/pdf/create-form.js',
+  'pdf-gst-invoice': './tools/pdf/gst-invoice.js',
+  'pdf-pos-billing': './tools/pdf/pos-billing.js',
+  'pdf-camera': './tools/pdf/camera.js',
+  'pdf-ocr-layer': './tools/pdf/ocr-layer.js',
+  'pdf-to-docx': './tools/pdf/to-docx.js',
+  'pdf-to-xlsx': './tools/pdf/to-xlsx.js',
+  'pdf-to-pptx': './tools/pdf/to-pptx.js',
+  'image-heic-support': './tools/image/heic-support.js',
 };
 
 /** Exact module URL for one tool (accepts id string or tool object). */

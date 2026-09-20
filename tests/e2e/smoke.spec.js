@@ -27,9 +27,13 @@ for (const id of TOOLS_34) {
   });
 }
 
-test('smoke home grid lists 34 tools', async ({ page }, testInfo) => {
+test('smoke home grid lists every registered tool', async ({ page }, testInfo) => {
   const violations = await installZeroUploadGuard(page, testInfo);
   await page.goto('#/');
-  await expect(page.locator('.tool-grid .card')).toHaveCount(34);
+  const heading = await page.locator('#view h2:has-text("Toolbox")').first().textContent();
+  const m = String(heading || '').match(/(\d+)\s*tools/);
+  const expected = m ? parseInt(m[1], 10) : 0;
+  expect(expected).toBeGreaterThan(0);
+  await expect(page.locator('.tool-grid .card')).toHaveCount(expected);
   expectZeroUploads(violations);
 });

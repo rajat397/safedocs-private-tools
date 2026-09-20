@@ -31,5 +31,6 @@ Evaluator verdict log. One row per gate.
 | 2026-09-19 | PASS | C04 bench workflow | .github/workflows/bench.yml | 0 | orchestrator |
 | 2026-09-19 | PASS | C05 bench report UI | bench/index.html | 0 | orchestrator |
 | 2026-09-19 | PASS | C06 PR comment bot | .github/workflows/bench.yml (PR comment) | 0 | orchestrator |
+| 2026-09-20 | PASS | left-tasks: create-form + edit/fill wiring + India4 + converters4, 54 TOOLS/MODULES, 4 CDN pins | tools/pdf/create-form,edit-content,fill-form,gst-invoice,pos-billing,camera,ocr-layer,to-docx,xlsx,pptx + tools/image/heic-support + registry 54/54 + pins docx/xlsx/pptxgenjs/heic2any verified | 1 | orchestrator |
 
 Rules: max 2 fix rounds total; builder must not commit until PASS; orchestrator owns fan-out.

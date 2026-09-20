@@ -3,7 +3,7 @@
 
 100% on-device PDF/image/PII tools, zero upload.
 
-## Features (34 tools, 10 categories)
+## Features (38 tools, 10 categories)
 
 - PDF (17): Merge PDFs (try `join pdfs`), Split, Compress, Images → PDF,
   PDF → Images, Protect, Watermark, Page numbers, Flatten, Reorder, Sign,
@@ -13,7 +13,8 @@
 - Compress (2): PDF to target size, Grayscale PDF
 - Convert (2): Text → PDF, PDF → Text
 - Security (2): Unlock / View PDF, Redact & burn
-- Image (3): Convert, EXIF inspector, Compress images
+- Image (7): Convert, EXIF inspector, Compress images, **Remove background (AI)**,
+  **Upscale (AI 2×/4×)**, **Colorize (AI)**, **Vectorize (SVG)**
 - Privacy (2): Scrub metadata, Mask PII
 - Scan / Media / Files: OCR on-device (EN + HI), Video → GIF, ZIP files
 - Search: forgiving synonyms + fuzzy match (`join` → Merge, `black out`
@@ -108,7 +109,7 @@
   incognito window.
 - Still stale? Open DevTools → Application → Service Workers →
   Unregister the SW, then reload.
-- Healthy footer must read `v4·34`.
+- Healthy footer must read `v4·38`.
 
 - Zero upload: files never leave your device; all processing runs locally
 - No servers, no analytics uploads, no tracking of file contents

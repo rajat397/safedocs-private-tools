@@ -19,6 +19,11 @@ export const TOOL_CAPS = {
   // phones), same guard class as ocr. All other new tools inherit base caps
   // (no entry needed — activeCaps falls through to CAPS).
   'pdf-redact-burn': { mobile: { maxSingleMB: 25, maxTotalMB: 100 } },
+  // Image Tools MVP: 50 MB/model mobile cap enforced by model-loader
+  'image-bgremove': { mobile: { maxSingleMB: 25, maxTotalMB: 100, maxImageDim: 4096 } },
+  'image-upscale': { mobile: { maxSingleMB: 25, maxTotalMB: 100, maxImageDim: 2048 } },
+  'image-colorize': { mobile: { maxSingleMB: 25, maxTotalMB: 100, maxImageDim: 2048 } },
+  'image-vectorize': { mobile: { maxSingleMB: 10, maxTotalMB: 50, maxImageDim: 2048 } },
 };
 
 export function isMobile() {
