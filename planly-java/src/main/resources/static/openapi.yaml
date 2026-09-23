@@ -1,0 +1,1250 @@
+openapi: 3.1.0
+info:
+  title: Planly Contracts PH0 T1
+  version: 0.1.0
+  description: >-
+    Stack-A-Monolith: single Worker + Static Assets. API served via Hono under
+    /v1, web served from web/dist via /* fallback. B2-01: generate, plans,
+    readjust, operations active with 202 {opId,status} + GET /operations/:opId
+    + GET /plans/:id teaser-or-full + POST /plans/:id/readjust 201
+    {readjustmentId,baseVersion,opId}. CUT (probe-gated): entitlement, Steps
+    2-6, discard. Cookie draftId: 30d, Secure, HttpOnly,
+    SameSite Lax, Path /. Allowlist: 9 ops, 7 active, 2 x-probe-gated.
+    Methods allowlist: GET, POST, PUT, DELETE only. Naming: id, opId,
+    Idempotency-Key, readjustmentId, version, n. Teaser allowlist frozen.
+    Idempotency-Key UUIDv4 only else 400.
+  x-stack: Stack-A-Monolith single Worker + Static Assets, Hono /v1 + web/dist /*
+  x-scope:
+    go: PH0 T1 drafts + steps/:n Step1 Q1-Q4 plus B2-01 generate/plans/readjust/operations
+    cut:
+      - entitlement
+      - steps-2-to-6
+      - discard
+  x-cookie-draftId:
+    name: draftId
+    maxAgeDays: 30
+    secure: true
+    httpOnly: true
+    sameSite: Lax
+    path: /
+  x-slos:
+    - id: SLO-1
+      inv: INV-1
+      text: Draft create p95 < 500ms, availability 99.9%
+    - id: SLO-2
+      inv: INV-2
+      text: Step1 read p95 < 300ms, availability 99.9%
+    - id: SLO-3
+      inv: INV-3
+      text: Step1 write p95 < 500ms, durability 99.999999%
+    - id: SLO-4
+      inv: INV-3
+      text: Idempotency-Key replay returns identical result, no duplicates
+    - id: SLO-5
+      inv: INV-4
+      text: draftId cookie persists 30d across sessions, Secure HttpOnly SameSite Lax Path /
+    - id: SLO-6
+      inv: INV-5
+      text: Contract drift zero — api responses validate against these schemas
+    - id: SLO-7
+      inv: INV-5
+      text: version conflict rate < 0.1% on Step1 writes under normal use
+servers:
+  - url: /v1
+    description: Hono API base (Worker). Web static at /* from web/dist.
+tags:
+  - name: drafts
+    description: GO PH0 T1
+  - name: gated
+    description: CUT — do not probe without explicit gate
+paths:
+  /drafts:
+    post:
+      operationId: createDraft
+      summary: Create draft (active)
+      tags: [drafts]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDraftRequest'
+      responses:
+        '201':
+          description: Draft created; sets draftId cookie
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: draftId=abc; Max-Age=2592000; Secure; HttpOnly; SameSite=Lax; Path=/
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Draft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /drafts/{id}/steps/{n}:
+    get:
+      operationId: getDraftStep
+      summary: Read draft step (active Step1 only, n=1)
+      tags: [drafts]
+      parameters:
+        - $ref: '#/components/parameters/DraftIdPath'
+        - $ref: '#/components/parameters/StepNPath'
+      responses:
+        '200':
+          description: Step1 payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Step1Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '451':
+          description: Steps 2-6 are probe-gated in PH0 T1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: putDraftStep
+      summary: Write draft step (active Step1 only, n=1)
+      tags: [drafts]
+      parameters:
+        - $ref: '#/components/parameters/DraftIdPath'
+        - $ref: '#/components/parameters/StepNPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Step1WriteRequest'
+      responses:
+        '200':
+          description: Step1 saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Step1Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: version conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '451':
+          description: Steps 2-6 are probe-gated in PH0 T1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /drafts/{id}/generate:
+    post:
+      operationId: generateDraft
+      summary: Generate plan from draft (async, idempotent)
+      tags: [gated]
+      parameters:
+        - $ref: '#/components/parameters/DraftIdPath'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRequest'
+      responses:
+        '202':
+          description: Generate accepted; poll GET /operations/{opId}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateAccepted'
+        '200':
+          description: Duplicate Idempotency-Key replay returns original opId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateAccepted'
+        '400':
+          description: Missing or malformed Idempotency-Key (UUIDv4 only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '402':
+          description: Entitlement required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Step stale or concurrent generate conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Step incomplete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /operations/{opId}:
+    get:
+      operationId: getOperation
+      summary: Poll async generate/readjust operation
+      tags: [gated]
+      parameters:
+        - $ref: '#/components/parameters/OpIdPath'
+      responses:
+        '200':
+          description: Operation state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Operation expired (TTL 24h)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /plans/{id}:
+    get:
+      operationId: getPlan
+      summary: Read plan teaser-or-full with ETag
+      tags: [gated]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Plan payload; unentitled callers get full:null teaser path
+          headers:
+            ETag:
+              schema:
+                type: string
+                example: plan-dr_01HXYZ-v1
+              description: ETag plan-<id>-vN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanResponse'
+        '304':
+          description: Not modified (If-None-Match hit)
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (bound-draft access only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /plans/{id}/readjust:
+    post:
+      operationId: readjustPlan
+      summary: Append plan readjustment (baseVersion required)
+      tags: [gated]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Id'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadjustRequest'
+      responses:
+        '201':
+          description: Readjustment appended; poll opId for new plan version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadjustAccepted'
+        '400':
+          description: Missing baseVersion or malformed Idempotency-Key (UUIDv4 only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '402':
+          description: Entitlement required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Unknown or stale baseVersion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Delta invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /entitlement:
+    get:
+      operationId: getEntitlement
+      summary: Entitlement (CUT probe-gated)
+      tags: [gated]
+      x-probe-gated: true
+      responses:
+        '451':
+          description: Probe-gated in PH0 T1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /drafts/{id}:
+    delete:
+      operationId: discardDraft
+      summary: Discard draft (CUT probe-gated)
+      tags: [gated]
+      x-probe-gated: true
+      parameters:
+        - $ref: '#/components/parameters/DraftIdPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '451':
+          description: Probe-gated in PH0 T1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  parameters:
+    DraftIdPath:
+      name: id
+      in: path
+      required: true
+      description: Draft id (naming canonical)
+      schema:
+        $ref: '#/components/schemas/Id'
+    StepNPath:
+      name: n
+      in: path
+      required: true
+      description: Step number 1..6; only n=1 active in PH0 T1, 2-6 gated
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 6
+        example: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Idempotency key, UUIDv4 only else 400
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        example: 550e8400-e29b-41d4-a716-446655440000
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Idempotency key required on generate/readjust, UUIDv4 only else 400
+      schema:
+        type: string
+        format: uuid
+        pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$
+        example: 550e8400-e29b-41d4-a716-446655440000
+    OpIdPath:
+      name: opId
+      in: path
+      required: true
+      description: Operation id canonical (opId)
+      schema:
+        $ref: '#/components/schemas/OpId'
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: Conditional GET with plan ETag plan-<id>-vN yields 304
+      schema:
+        type: string
+        example: plan-dr_01HXYZ-v1
+    DraftIdCookie:
+      name: draftId
+      in: cookie
+      required: false
+      description: draftId cookie 30d Secure HttpOnly SameSite Lax Path /
+      schema:
+        $ref: '#/components/schemas/Id'
+  schemas:
+    Id:
+      type: string
+      minLength: 1
+      maxLength: 128
+      example: dr_01HXYZ
+    OpId:
+      type: string
+      description: Operation id canonical (opId)
+      minLength: 1
+      maxLength: 128
+      example: op_01HXYZ
+    Version:
+      type: integer
+      minimum: 1
+      example: 1
+    StepN:
+      type: integer
+      minimum: 1
+      maximum: 6
+      example: 1
+    ReadjustmentId:
+      type: string
+      description: readjustmentId canonical
+      minLength: 1
+      maxLength: 128
+      example: ra_01HXYZ
+    Step1:
+      type: object
+      required: [q1, q2, q3, q4]
+      additionalProperties: false
+      properties:
+        q1:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Q1 goal
+          example: Launch a weekly study plan
+        q2:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Q2 context
+          example: Evenings only, 30 min per day
+        q3:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Q3 constraints
+          example: No weekends, low cost
+        q4:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Q4 success criteria
+          example: Finish two chapters per week
+    Step1WriteRequest:
+      type: object
+      required: [version, step1]
+      additionalProperties: false
+      properties:
+        version:
+          $ref: '#/components/schemas/Version'
+        opId:
+          $ref: '#/components/schemas/OpId'
+        step1:
+          $ref: '#/components/schemas/Step1'
+    Step1Envelope:
+      type: object
+      required: [id, version, n, step1]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          $ref: '#/components/schemas/Version'
+        n:
+          $ref: '#/components/schemas/StepN'
+        opId:
+          $ref: '#/components/schemas/OpId'
+        step1:
+          $ref: '#/components/schemas/Step1'
+    Draft:
+      type: object
+      required: [id, version]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          $ref: '#/components/schemas/Version'
+        opId:
+          $ref: '#/components/schemas/OpId'
+    CreateDraftRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        opId:
+          $ref: '#/components/schemas/OpId'
+    GenerateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        opId:
+          $ref: '#/components/schemas/OpId'
+    ReadjustRequest:
+      type: object
+      required: [baseVersion, delta]
+      additionalProperties: false
+      properties:
+        baseVersion:
+          $ref: '#/components/schemas/Version'
+        delta:
+          $ref: '#/components/schemas/ReadjustDelta'
+        opId:
+          $ref: '#/components/schemas/OpId'
+    ReadjustDelta:
+      type: object
+      required: [missedDate]
+      additionalProperties: false
+      description: confidence outside 1-5 -> 400 with field-level error
+      properties:
+        missedDate:
+          type: string
+          format: date
+          description: Missed calendar date YYYY-MM-DD
+          example: 2026-09-20
+        taskId:
+          $ref: '#/components/schemas/Id'
+        confidence:
+          type: integer
+          minimum: 1
+          maximum: 5
+        evidence:
+          type: string
+    ReadjustAccepted:
+      type: object
+      required: [readjustmentId, baseVersion, opId]
+      additionalProperties: false
+      properties:
+        readjustmentId:
+          $ref: '#/components/schemas/ReadjustmentId'
+        baseVersion:
+          $ref: '#/components/schemas/Version'
+        opId:
+          $ref: '#/components/schemas/OpId'
+    GenerateAccepted:
+      type: object
+      required: [opId, status]
+      additionalProperties: false
+      properties:
+        opId:
+          $ref: '#/components/schemas/OpId'
+        status:
+          type: string
+          const: accepted
+    Operation:
+      type: object
+      required: [opId, status]
+      additionalProperties: false
+      properties:
+        opId:
+          $ref: '#/components/schemas/OpId'
+        status:
+          type: string
+          enum: [accepted, running, succeeded, failed]
+        draftId:
+          $ref: '#/components/schemas/Id'
+        planId:
+          $ref: '#/components/schemas/Id'
+        planVersion:
+          $ref: '#/components/schemas/Version'
+        errorCode:
+          type: string
+    PlanTeaser:
+      type: object
+      additionalProperties: false
+      description: Teaser allowlist frozen; unlisted keys default to full
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        summary:
+          type: string
+          maxLength: 280
+        stepCount:
+          type: integer
+          minimum: 1
+        priceRange:
+          type: string
+    Sprint:
+      type: object
+      required: [id, n, title]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        n:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          maxLength: 120
+        dailyIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Id'
+    Daily:
+      type: object
+      required: [id, date, sprintId]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        date:
+          type: string
+          format: date
+        sprintId:
+          $ref: '#/components/schemas/Id'
+        tasks:
+          type: array
+          description: Missing taskId/title/done_criteria -> 400 with field-level error
+          items:
+            $ref: '#/components/schemas/DailyTask'
+    DailyTask:
+      type: object
+      required: [taskId, title, done_criteria]
+      additionalProperties: false
+      description: Missing taskId/title/done_criteria -> 400 with field-level error
+      properties:
+        taskId:
+          $ref: '#/components/schemas/Id'
+        doing_verb:
+          type: string
+        title:
+          type: string
+        minutes:
+          type: integer
+          minimum: 1
+        done_criteria:
+          type: string
+        planly_check:
+          type: string
+        confidence:
+          type: integer
+          minimum: 1
+          maximum: 5
+        miss_rule:
+          type: string
+    ResourceRef:
+      type: object
+      required: [url]
+      additionalProperties: false
+      description: Link-only; MUST NOT store copied upstream text
+      properties:
+        url:
+          type: string
+          format: uri
+        attribution:
+          type: string
+        license_note:
+          type: string
+    Track:
+      type: object
+      required: [id, title, level, sprint, taskIds]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        title:
+          type: string
+        level:
+          type: string
+          enum: [L0, L1, L2, L3, L4]
+        sprint:
+          $ref: '#/components/schemas/Id'
+        taskIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Id'
+    PlanFullMetrics:
+      type: object
+      required: [totalSprints, subjects, studyHours]
+      additionalProperties: false
+      properties:
+        totalSprints:
+          type: integer
+          minimum: 1
+        subjects:
+          type: integer
+          minimum: 1
+        studyHours:
+          type: number
+          minimum: 0
+        estDuration:
+          type: string
+        estCompletion:
+          type: string
+          format: date
+    PlanFull:
+      type: object
+      required: [sprints, dailies, metrics, tracks, progress]
+      additionalProperties: false
+      properties:
+        sprints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sprint'
+        dailies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Daily'
+        metrics:
+          $ref: '#/components/schemas/PlanFullMetrics'
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+        progress:
+          $ref: '#/components/schemas/PlanProgress'
+    PlanProgress:
+      type: object
+      required: [done, total]
+      additionalProperties: false
+      properties:
+        done:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+    PlanResponse:
+      type: object
+      required: [id, version, teaser, full]
+      additionalProperties: false
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          $ref: '#/components/schemas/Version'
+        teaser:
+          $ref: '#/components/schemas/PlanTeaser'
+        full:
+          anyOf:
+            - $ref: '#/components/schemas/PlanFull'
+            - type: 'null'
+          description: full:null explicit on teaser path
+    Error:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          example: gated
+        message:
+          type: string
+          example: Probe-gated in PH0 T1
+    # T1 wizard Steps 2-6 StepDef skeletons — static-string grade,
+    # rendered-unverified. SSR Q1-Q4 (Step1) untouched. CUT LINE: no horizon
+    # field (2-12mo is subscription-validity copy only), no sprint/daily
+    # object shapes (loader/metric strings are display-only).
+    S1PrepDaysExtension:
+      type: object
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        prepDaysQuestion:
+          type: string
+          const: In how many days do you want to get prepared?
+        prepDaysOptions:
+          type: array
+          items:
+            type: string
+            enum: ['30', '60', '90', '120', custom]
+        customDaysQuestion:
+          type: string
+          const: Enter number of days
+        customDays:
+          type: integer
+          minimum: 7
+          maximum: 365
+        prepDaysHint:
+          type: string
+          const: You can adjust your daily study hours later.
+    S1Validators:
+      type: object
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        role:
+          type: string
+          const: Select a role to continue.
+        experience:
+          type: string
+          const: Select your experience level.
+        experienceInternSkip:
+          type: string
+          description: Experience validator skipped on intern track
+          const: skipped intern track
+        interviewTarget:
+          type: string
+          const: Select your interview target.
+        companyRegion:
+          type: string
+          const: Select the company region you are preparing for.
+        prepDays:
+          type: string
+          const: Select how many days you want to prepare.
+        customPrepDays:
+          type: string
+          const: Enter a number between 7 and 365.
+    SubjectKey:
+      type: string
+      enum: [dsa, dbms, computer-networks, operating-system, oops, lld]
+    CodingLanguage:
+      type: string
+      enum: ['C++', Java, Python]
+      x-default-slug: cpp
+    LevelGeneric:
+      type: string
+      enum: [New to this, Basic, Intermediate, Strong]
+    LevelDsa:
+      type: string
+      enum: [Start from zero, DSA Foundations, Pattern Mastery, Quick Revision]
+      x-track: 4-track
+    LevelDbmsCnOs:
+      type: string
+      enum: [Learn in Depth, Interview Preparation]
+      x-track: 2-track
+    LevelOopsLld:
+      type: string
+      enum: [Learn from Fundamentals, Interview Preparation]
+      x-track: 2-track
+    S2StepDef:
+      type: object
+      required: [step, questions, options, validation, cta, grade, rendered]
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        step:
+          type: integer
+          const: 2
+        questions:
+          type: array
+          items:
+            type: string
+          example: [Recommended subjects]
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubjectKey'
+          example: [dsa, dbms, computer-networks, operating-system, oops, lld]
+        optionsSource:
+          type: string
+          const: server
+        helperMascot:
+          type: string
+          const: We've picked the essentials for your goal.
+        helperSubtitle:
+          type: string
+          const: We selected subjects that matter most for your target interviews. You can remove anything you don't want to prepare.
+        validation:
+          type: array
+          items:
+            type: string
+          example: [V-S2-01 >=1 subject, V-S2-02 remove-unavailable]
+        cta:
+          type: string
+          const: Continue with selected subjects
+        grade:
+          type: string
+          const: static-string
+        rendered:
+          type: string
+          const: unverified
+    S3StepDef:
+      type: object
+      required: [step, questions, options, validation, cta, grade, rendered]
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        step:
+          type: integer
+          const: 3
+        questions:
+          type: array
+          items:
+            type: string
+          example: [coding language, levels per subject]
+        codingLanguageQuestion:
+          type: string
+          const: What is your preferred coding language?
+        codingLanguageScope:
+          type: array
+          items:
+            type: string
+          example: [dsa, new_to_this]
+        levelGeneric:
+          $ref: '#/components/schemas/LevelGeneric'
+        levelDsa:
+          $ref: '#/components/schemas/LevelDsa'
+        levelDbmsCnOs:
+          $ref: '#/components/schemas/LevelDbmsCnOs'
+        levelOopsLld:
+          $ref: '#/components/schemas/LevelOopsLld'
+        mascot:
+          type: string
+          const: Let's find out levels for you.
+        title:
+          type: string
+          const: Select your current level for each subject
+        subtitle:
+          type: string
+          const: We estimated your level from your TUF activity. You can change it before generating the plan.
+        validation:
+          type: array
+          items:
+            type: string
+          example: [V-S3-01 language, V-S3-02 every-subject level]
+        cta:
+          type: string
+          const: Confirm levels
+        grade:
+          type: string
+          const: static-string
+        rendered:
+          type: string
+          const: unverified
+    S4StepDef:
+      type: object
+      required: [step, questions, options, validation, cta, grade, rendered]
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        step:
+          type: integer
+          const: 4
+        questions:
+          type: array
+          items:
+            type: string
+          example: [roadmap review]
+        options:
+          type: array
+          items:
+            type: string
+          example: [hours banner N hours, Tufy prompt, Weighted schedule preview]
+        mascot:
+          type: string
+          const: Ask Tufy to adjust this syllabus.
+        title:
+          type: string
+          const: Review your personalized roadmap
+        subtitle:
+          type: string
+          const: We created this based on your goal, subjects, and comfort level. The final arrangement will be completed in the last step.
+        hoursBanner:
+          type: string
+          const: We've planned N hour(s) of focused learning for you.
+        tufyPrompt:
+          type: string
+          const: Ask Tufy to adjust this syllabus — e.g. remove graphs, add SQL join practice.
+        tufyPlaceholder:
+          type: string
+          const: Ask Tufy...
+        schedulePreview:
+          type: string
+          const: Weighted schedule preview
+        scheduleHint:
+          type: string
+          const: Tasks are mixed across subjects in backend order. This is the planned sequence before availability packing.
+        validation:
+          type: array
+          items:
+            type: string
+          example: [V-S4-01 >=1 subject]
+        cta:
+          type: string
+          const: Confirm content
+        grade:
+          type: string
+          const: static-string
+        rendered:
+          type: string
+          const: unverified
+    S5StepDef:
+      type: object
+      required: [step, questions, options, validation, cta, grade, rendered]
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        step:
+          type: integer
+          const: 5
+        questions:
+          type: array
+          items:
+            type: string
+          example: [weekly availability]
+        weekdaySliders:
+          type: object
+          required: [min, max, step, default]
+          additionalProperties: false
+          properties:
+            min:
+              type: integer
+              const: 0
+            max:
+              type: integer
+              const: 16
+            step:
+              type: integer
+              const: 1
+            default:
+              type: integer
+              const: 0
+        weekdays:
+          type: array
+          items:
+            type: string
+          example: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+        mascot:
+          type: string
+          const: Set a pace that works for you.
+        title:
+          type: string
+          const: Set your weekly study availability.
+        subtitle:
+          type: string
+          const: Tell us how much time you can give each day so we can schedule your roadmap realistically.
+        tip:
+          type: string
+          const: You can finish earlier by adding more hours on any day.
+        estDays:
+          type: string
+          const: 'Est. days:'
+        dayOff:
+          type: string
+          const: Day off
+        totalAllocated:
+          type: string
+          const: You have allocated a total of N hours for your weekly schedule.
+        validation:
+          type: array
+          items:
+            type: string
+          example: [V-S5-01 >=1 hour]
+        cta:
+          type: string
+          const: Confirm availability
+        grade:
+          type: string
+          const: static-string
+        rendered:
+          type: string
+          const: unverified
+    S6StepDef:
+      type: object
+      required: [step, questions, options, validation, cta, grade, rendered]
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        step:
+          type: integer
+          const: 6
+        questions:
+          type: array
+          items:
+            type: string
+          example: [plan name 1-60, start Today/Tomorrow/Custom>=today]
+        planNameMax:
+          type: integer
+          const: 60
+        planNameLabel:
+          type: string
+          const: Plan name
+        startOptions:
+          type: array
+          items:
+            type: string
+          example: [Today, Tomorrow, Custom]
+        customConstraint:
+          type: string
+          const: '>=today'
+        mascot:
+          type: string
+          const: Looks perfect! You're all set to begin your preparation journey.
+        title:
+          type: string
+          const: Finalise your plan
+        subtitle:
+          type: string
+          const: Review your schedule and lock it in
+        detailsTitle:
+          type: string
+          const: Plan details
+        detailsSubtitle:
+          type: string
+          const: Give your roadmap a name and choose when to start
+        startWhen:
+          type: string
+          const: When do you want to start?
+        startHint:
+          type: string
+          const: No pressure to begin today. Start whenever you're ready, we'll adjust your roadmap from there.
+        startUnavailableHint:
+          type: string
+          const: There isn't enough time left today for your allocated study hours. Choose tomorrow or a later date — we'll adjust your roadmap from there.
+        validation:
+          type: array
+          items:
+            type: string
+          example: [V-S6-01 plan name 1-60, V-S6-02 start >=today]
+        cta:
+          type: string
+          const: Generate plan
+        grade:
+          type: string
+          const: static-string
+        rendered:
+          type: string
+          const: unverified
+    ValidationCatalog:
+      type: object
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        V-S2-01:
+          type: string
+          const: Select at least one subject.
+        V-S2-02:
+          type: string
+          const: Remove subjects that are no longer available before continuing.
+        V-S3-01:
+          type: string
+          const: Select your preferred coding language.
+        V-S3-02:
+          type: string
+          const: Select a level for every subject.
+        V-S4-01:
+          type: string
+          const: Keep at least one subject in your roadmap.
+        V-S5-01:
+          type: string
+          const: Allocate at least one study hour in your week.
+        V-S6-01:
+          type: string
+          const: Enter a plan name (1–60 characters).
+        V-S6-02-startDate:
+          type: string
+          const: Choose when you want to start.
+        V-S6-02-customStartDate:
+          type: string
+          const: Pick a start date that is today or later.
+    WizardCTAs:
+      type: object
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        s2:
+          type: string
+          const: Continue with selected subjects
+        s3:
+          type: string
+          const: Confirm levels
+        s4:
+          type: string
+          const: Confirm content
+        s5:
+          type: string
+          const: Confirm availability
+        s6:
+          type: string
+          const: Generate plan
+    GenerateLoader:
+      type: array
+      minItems: 5
+      maxItems: 5
+      x-grade: static-string
+      x-rendered: unverified
+      items:
+        type: string
+      example: [Understanding your goals, Estimating preparation time, Arranging the topics, Organising into sprints, Crafting your plan]
+    PlanMetrics:
+      type: array
+      minItems: 5
+      maxItems: 5
+      x-grade: static-string
+      x-rendered: unverified
+      items:
+        type: string
+      example: [Total sprints, Subjects, Study hours, Est. duration, Est. completion]
+    PlanSuccess:
+      type: object
+      additionalProperties: false
+      x-grade: static-string
+      x-rendered: unverified
+      properties:
+        ready:
+          type: string
+          const: Your personalised roadmap is ready
+        cta:
+          type: string
+          const: Go to Dashboard
+        stepIndicator:
+          type: string
+          const: Step N of 6
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

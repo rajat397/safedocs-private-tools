@@ -1,0 +1,15 @@
+schema: spec-driven
+project: planly-creation-core
+context: |
+  SafeDocs toolbox (static, separate origin, LOCKED) plus Planly
+  creation-core: Supabase Postgres + Workers Hono + Drizzle.
+  Planly origin is separate and LOCKED; 8 ops under /v1/*.
+  TeaserGuard gates teaser content; teaser stays frozen.
+rules:
+  - docs/product/planly/backend-spec.md
+  - openspec/changes/planly-hireable-tracks/specs/plan/schema-delta.md
+  - openspec/changes/planly-ui-tracks/specs/ui/render-delta.md
+conventions:
+  paths: kebab-case
+  files_max_lines: 150
+  attributions: link-only
