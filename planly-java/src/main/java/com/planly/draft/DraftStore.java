@@ -32,6 +32,7 @@ public final class DraftStore {
 
   private static final Map<String, Draft> DRAFTS = new ConcurrentHashMap<>();
   private static final Map<String, IdentityLink> LINKS = new ConcurrentHashMap<>();
+  private static final Map<String, String> IDEMPOTENCY_KEYS = new ConcurrentHashMap<>();
 
   private DraftStore() {
   }
@@ -45,6 +46,15 @@ public final class DraftStore {
 
   public static Draft get(String id) {
     return DRAFTS.get(id);
+  }
+
+  public static Draft getByIdempotencyKey(String key) {
+    String draftId = IDEMPOTENCY_KEYS.get(key);
+    return draftId == null ? null : DRAFTS.get(draftId);
+  }
+
+  public static void putIdempotencyKey(String key, String draftId) {
+    IDEMPOTENCY_KEYS.put(key, draftId);
   }
 
   public static boolean purged(Draft draft, long now) {
@@ -172,5 +182,6 @@ public final class DraftStore {
   public static void resetForTests() {
     DRAFTS.clear();
     LINKS.clear();
+    IDEMPOTENCY_KEYS.clear();
   }
 }

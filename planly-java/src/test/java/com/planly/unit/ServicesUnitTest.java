@@ -134,4 +134,96 @@ class ServicesUnitTest {
     assertThat(anon.draftId()).isEqualTo("d1");
     assertThat(List.of(anon).size()).isEqualTo(1);
   }
+
+  @Test
+  void entitlementDenySetBranchCoverage() {
+    // Test denySet with ENTITLEMENT_DENY env var not set (default branch)
+    EntitlementService.resetForTests();
+    Principal alice = new Principal("u1", null, true);
+    assertThat(EntitlementService.resolve(alice).canGenerate()).isTrue();
+    assertThat(EntitlementService.resolve(alice).canReadFull()).isTrue();
+    assertThat(EntitlementService.resolve(alice).canReadjust()).isTrue();
+
+    // Test with env var set to various values using reflection to avoid System.setProperty issues
+    try {
+      java.lang.reflect.Method denySet = EntitlementService.class.getDeclaredMethod("denySet");
+      denySet.setAccessible(true);
+
+      // Test denySet() directly with various env scenarios
+      // We can't easily change System.getenv, so test the behavior through resolve() with denyOverride
+
+      EntitlementService.setDenyOverride(java.util.Set.of("generate"));
+      assertThat(EntitlementService.resolve(alice).canGenerate()).isFalse();
+      assertThat(EntitlementService.resolve(alice).canReadFull()).isTrue();
+
+      EntitlementService.setDenyOverride(java.util.Set.of("all"));
+      assertThat(EntitlementService.resolve(alice).canGenerate()).isFalse();
+      assertThat(EntitlementService.resolve(alice).canReadFull()).isFalse();
+
+      EntitlementService.setDenyOverride(java.util.Set.of("full"));
+      assertThat(EntitlementService.resolve(alice).canReadFull()).isFalse();
+
+      EntitlementService.setDenyOverride(java.util.Set.of("read-full"));
+      assertThat(EntitlementService.resolve(alice).canReadFull()).isFalse();
+
+      EntitlementService.setDenyOverride(java.util.Set.of("readjust"));
+      assertThat(EntitlementService.resolve(alice).canReadjust()).isFalse();
+
+      // Test with empty parts and whitespace via denyOverride
+      EntitlementService.setDenyOverride(java.util.Set.of("generate", "read-full"));
+      assertThat(EntitlementService.resolve(alice).canGenerate()).isFalse();
+      assertThat(EntitlementService.resolve(alice).canReadFull()).isFalse();
+      assertThat(EntitlementService.resolve(alice).canReadjust()).isTrue();
+
+      EntitlementService.resetForTests();
+      assertThat(EntitlementService.resolve(alice).canGenerate()).isTrue();
+      assertThat(EntitlementService.resolve(alice).canReadFull()).isTrue();
+      assertThat(EntitlementService.resolve(alice).canReadjust()).isTrue();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Test
+  void rateLimitGlobalShedBranchCoverage() {
+    // Test checkGlobalShed when under limit (returns 0)
+    RateLimitService.resetForTests();
+    long now = System.currentTimeMillis();
+    for (int i = 0; i < RateLimitService.GLOBAL_PER_DAY; i++) {
+      assertThat(RateLimitService.checkGlobalShed(now)).isZero();
+    }
+    // Test checkGlobalShed when limit exceeded (returns positive)
+    assertThat(RateLimitService.checkGlobalShed(now)).isPositive();
+
+    // Test checkGlobalShed with time advancement (window expiry)
+    long dayMs = 24L * 3600 * 1000;
+    assertThat(RateLimitService.checkGlobalShed(now + dayMs + 1)).isZero();
+  }
+
+  @Test
+  void rateLimitRetryAfterBranchCoverage() {
+    // Test retryAfter with null oldest (returns 1)
+    RateLimitService.resetForTests();
+    long now = System.currentTimeMillis();
+    // Access private method via reflection to test the null oldest branch
+    try {
+      java.lang.reflect.Method method = RateLimitService.class.getDeclaredMethod("retryAfter", Long.class, long.class, long.class);
+      method.setAccessible(true);
+      // null oldest
+      long result = (long) method.invoke(null, null, 3600_000L, now);
+      assertThat(result).isEqualTo(1);
+
+      // oldest in future (should return 1 due to Math.max)
+      long future = now + 1000;
+      result = (long) method.invoke(null, future, 3600_000L, now);
+      assertThat(result).isGreaterThanOrEqualTo(1);
+
+      // normal case
+      long oldest = now - 1000;
+      result = (long) method.invoke(null, oldest, 3600_000L, now);
+      assertThat(result).isGreaterThanOrEqualTo(1);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 }

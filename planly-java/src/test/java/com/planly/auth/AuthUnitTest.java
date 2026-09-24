@@ -262,6 +262,91 @@ class AuthUnitTest {
     JwtVerifier.resetForTests();
   }
 
+  @Test
+  void jwtVerifierBranchCoverage() {
+    // Test verify with null/blank token
+    assertThatThrownBy(() -> JwtVerifier.verify(null))
+        .isInstanceOf(AuthException.class)
+        .hasMessage("missing token");
+    assertThatThrownBy(() -> JwtVerifier.verify("  "))
+        .isInstanceOf(AuthException.class)
+        .hasMessage("missing token");
+
+    // Test verify with test verifier returning null/empty sub
+    JwtVerifier.setTestVerifier(token -> null);
+    assertThatThrownBy(() -> JwtVerifier.verify("good"))
+        .isInstanceOf(AuthException.class)
+        .hasMessage("forged or invalid sub");
+
+    JwtVerifier.setTestVerifier(token -> "");
+    assertThatThrownBy(() -> JwtVerifier.verify("good"))
+        .isInstanceOf(AuthException.class)
+        .hasMessage("forged or invalid sub");
+
+    JwtVerifier.setTestVerifier(token -> "valid-sub");
+    assertThat(JwtVerifier.verify("good")).isEqualTo("valid-sub");
+    JwtVerifier.resetForTests();
+
+    // Test lenientAllowed branches (APP_PROFILE=test, AUTH_LENIENT=true in surefire)
+    // Can't easily test the false branch without env manipulation, but we can test the method directly
+    // The lenientAllowed is public static, we can test it reflects env
+    // In surefire it's true, so we just verify it's true here
+    assertThat(JwtVerifier.lenientAllowed()).isTrue();
+
+    // Test numberClaim branch (null return)
+    try {
+      java.lang.reflect.Method method = JwtVerifier.class.getDeclaredMethod("numberClaim", String.class, String.class);
+      method.setAccessible(true);
+      // Missing claim
+      Long result = (Long) method.invoke(null, "{}", "exp");
+      assertThat(result).isNull();
+
+      // Invalid number format
+      result = (Long) method.invoke(null, "{\"exp\":\"not-a-number\"}", "exp");
+      assertThat(result).isNull();
+
+      // Valid number
+      result = (Long) method.invoke(null, "{\"exp\":12345}", "exp");
+      assertThat(result).isEqualTo(12345L);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+
+    // Test splitKeys branch (empty keys)
+    try {
+      java.lang.reflect.Method method = JwtVerifier.class.getDeclaredMethod("splitKeys", String.class);
+      method.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      java.util.List<String> keys = (java.util.List<String>) method.invoke(null, "{\"keys\":[]}");
+      assertThat(keys).isEmpty();
+
+      // Malformed JWKS (no keys array)
+      keys = (java.util.List<String>) method.invoke(null, "{}");
+      assertThat(keys).isEmpty();
+
+      // Valid JWKS with one key
+      keys = (java.util.List<String>) method.invoke(null, "{\"keys\":[{\"kid\":\"k1\",\"n\":\"n1\",\"e\":\"e1\"}]}");
+      assertThat(keys).hasSize(1);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+
+    // Test requireClaim branch (missing claim)
+    try {
+      java.lang.reflect.Method method = JwtVerifier.class.getDeclaredMethod("requireClaim", String.class, String.class);
+      method.setAccessible(true);
+      try {
+        method.invoke(null, "{}", "n");
+        assertThat(false).isTrue(); // should not reach
+      } catch (java.lang.reflect.InvocationTargetException ex) {
+        assertThat(ex.getCause()).isInstanceOf(AuthException.class);
+        assertThat(ex.getCause()).hasMessageContaining("invalid jwk");
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   private static String base64Url(BigInteger value) {
     byte[] bytes = value.toByteArray();
     if (bytes.length > 1 && bytes[0] == 0) {

@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import com.planly.auth.AuthException;
 import com.planly.auth.Auths;
@@ -14,6 +15,7 @@ import com.planly.common.Errors;
 import com.planly.draft.DraftDtos.BindResponse;
 import com.planly.draft.DraftDtos.DiscardResponse;
 import com.planly.draft.DraftDtos.DraftResponse;
+import com.planly.gen.IdempotencyKeys;
 import com.planly.rate.RateLimitService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +52,24 @@ public class DraftController {
   public ResponseEntity<DraftResponse> create(HttpServletRequest request,
       @RequestBody(required = false) byte[] raw) {
     shed();
+    String idemKey = request.getHeader("Idempotency-Key");
+    if (idemKey != null && !idemKey.isBlank()) {
+      if (!IdempotencyKeys.valid(idemKey)) {
+        throw Errors.fail(HttpStatus.BAD_REQUEST, "BAD_IDEMPOTENCY_KEY");
+      }
+      String trimmedKey = idemKey.trim();
+      DraftStore.Draft existing = DraftStore.getByIdempotencyKey(trimmedKey);
+      if (existing != null) {
+        log.info("draft replay id={} key={}", existing.id(), trimmedKey);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.SET_COOKIE, draftCookie(existing.id()).toString())
+            .body(new DraftResponse(existing.id(), existing.version(), existing.status()));
+      }
+    }
     Principal principal = authedOrAnon(request);
+    if (raw != null && raw.length > 32 * 1024) {
+      throw Errors.fail(HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE");
+    }
     Map<String, Object> body = parseObject(raw, "BAD_REQUEST", HttpStatus.BAD_REQUEST);
     Object next = body.get("next");
     if (next != null && !(next instanceof String && validNext((String) next))) {
@@ -63,8 +82,11 @@ public class DraftController {
         throw rateLimited(retry);
       }
     }
-    DraftStore.Draft draft = DraftStore.create(principal.userId(),
-        System.currentTimeMillis());
+    long now = System.currentTimeMillis();
+    DraftStore.Draft draft = DraftStore.create(principal.userId(), now);
+    if (idemKey != null && !idemKey.isBlank()) {
+      DraftStore.putIdempotencyKey(idemKey.trim(), draft.id());
+    }
     log.info("draft created id={} authed={}", draft.id(), principal.authed());
     return created(draft);
   }
@@ -79,7 +101,25 @@ public class DraftController {
     }
     DraftStore.Draft draft = load(id);
     denyUnlessHolder(draft, principal);
-    return ResponseEntity.ok(new DraftResponse(draft.id(), draft.version(), draft.status()));
+    String etag = etag(draft.version());
+    if (etagMatches(request.getHeader("If-None-Match"), etag)) {
+      return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+          .header("ETag", etag).build();
+    }
+    return ResponseEntity.ok().header("ETag", etag)
+        .body(new DraftResponse(draft.id(), draft.version(), draft.status()));
+  }
+
+  static String etag(int version) {
+    return "\"v" + version + "\"";
+  }
+
+  static boolean etagMatches(String header, String etag) {
+    if (header == null) {
+      return false;
+    }
+    String norm = header.trim().replace("\"", "");
+    return norm.equals(etag.replace("\"", ""));
   }
 
   @PostMapping("/{id}/bind")

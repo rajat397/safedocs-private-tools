@@ -119,7 +119,9 @@ class PlanTeaserSliceTest {
     PlanStore.PlanRecord plan = SliceSupport.materialise(draft.id());
 
     mvc.perform(get("/v1/plans/" + plan.id()))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.full", nullValue()))
+        .andExpect(jsonPath("$.teaser.title").isNotEmpty());
 
     mvc.perform(get("/v1/plans/" + plan.id())
             .header("Authorization", SliceSupport.bearer(SliceSupport.BOB_TOKEN)))

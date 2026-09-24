@@ -6,8 +6,9 @@
 -- Readjustments delta column already jsonb; new keys are additive.
 
 -- Index for faster progress derivation (optional, for large datasets)
-CREATE INDEX IF NOT EXISTS idx_readjustments_draft_delta_task
-  ON readjustments (draft_id, (delta->>'taskId'))
+-- readjustments has plan_id; join plans to get draft_id when needed
+CREATE INDEX IF NOT EXISTS idx_readjustments_plan_delta_task
+  ON readjustments (plan_id, (delta->>'taskId'))
   WHERE delta ? 'taskId';
 
 -- Comment for clarity

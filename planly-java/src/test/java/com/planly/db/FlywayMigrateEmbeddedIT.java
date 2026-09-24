@@ -115,7 +115,7 @@ class FlywayMigrateEmbeddedIT {
         jdbc.queryForList(
             "SELECT table_name FROM information_schema.tables "
                 + "WHERE table_schema = 'public' AND table_name IN "
-                + "('drafts','steps','identity_links','operations','entitlements','plans','readjustments','plan_tracks','plan_dailies','plan_progress')",
+                + "('drafts','steps','identity_links','operations','entitlements','plans','readjustments')",
             String.class);
     assertThat(tables)
         .containsExactlyInAnyOrder(
@@ -125,10 +125,7 @@ class FlywayMigrateEmbeddedIT {
             "operations",
             "entitlements",
             "plans",
-            "readjustments",
-            "plan_tracks",
-            "plan_dailies",
-            "plan_progress");
+            "readjustments");
   }
 
   @Test

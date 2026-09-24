@@ -59,9 +59,20 @@ public class PlanController {
     if ("discarded".equals(draft.status())) {
       throw Errors.fail(HttpStatus.GONE, "DISCARDED");
     }
-    Principal principal = principal(request);
-    denyUnlessHolder(draft, principal);
-    boolean entitled = EntitlementService.resolve(principal).canReadFull();
+    Principal principal;
+    try {
+      principal = Auths.resolve(request);
+    } catch (Exception e) {
+      principal = Principal.anon(null);
+    }
+    // Check if authenticated but not owner/holder -> 403
+    Auths.Access denied = Auths.checkDraftAccess(principal,
+        draft.ownerUserId(), draft.id());
+    if (denied == Auths.Access.FORBIDDEN) {
+      throw Errors.fail(HttpStatus.FORBIDDEN, "FORBIDDEN");
+    }
+    // Allow teaser for unauthenticated (public) and holders; full only for entitled owners
+    boolean entitled = principal.authed() && EntitlementService.resolve(principal).canReadFull();
     if (entitled) {
       EntitlementService.auditAllow(principal.userId(), "C2-read-full");
     }

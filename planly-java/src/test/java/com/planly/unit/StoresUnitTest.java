@@ -1,5 +1,6 @@
 package com.planly.unit;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.planly.draft.DraftStore;
@@ -176,5 +177,121 @@ class StoresUnitTest {
     OpStore.Live live = OpStore.byKey("d1", "k3", System.currentTimeMillis());
     assertThat(live).isInstanceOf(OpStore.Live.Found.class);
     assertThat(((OpStore.Live.Found) live).op().status()).isIn("running", "succeeded");
+  }
+
+  @Test
+  void planStoreAppendReadjustmentInsertBranch() {
+    String draftId = "d1";
+    StepStore.put(draftId, 1, Map.of("planName", "T"), 1, 1000L);
+    PlanStore.PlanRecord v1 = PlanStore.materialise(draftId, 2000L);
+
+    // Test insert when BY_DRAFT is null (first plan for draft)
+    PlanStore.PlanRecord v2 = PlanStore.appendReadjustment(v1.id(), draftId, 1,
+        Map.of("missedDate", "2026-01-01"), "u1", "k1", "op1", 3000L);
+    assertThat(v2.version()).isEqualTo(2);
+
+    // Test insert with existing BY_DRAFT list
+    PlanStore.PlanRecord v3 = PlanStore.appendReadjustment(v2.id(), draftId, 2,
+        Map.of("missedDate", "2026-01-02"), "u1", "k2", "op2", 4000L);
+    assertThat(v3.version()).isEqualTo(3);
+    assertThat(PlanStore.versions(draftId)).containsExactly(1, 2, 3);
+  }
+
+  @Test
+  void planStoreInsertBranch() {
+    // Test insert when BY_DRAFT.get returns null (new draft)
+    String draftId = "d-new";
+    StepStore.put(draftId, 1, Map.of("planName", "New"), 1, 1000L);
+    PlanStore.PlanRecord p = PlanStore.materialise(draftId, 2000L);
+    assertThat(p.draftId()).isEqualTo(draftId);
+    assertThat(p.version()).isEqualTo(1);
+  }
+
+  @Test
+  void planStoreTeaserForBranch() {
+    String draftId = "d1";
+    // Without step1
+    PlanStore.resetForTests();
+    StepStore.resetForTests();
+    PlanStore.PlanRecord plan = PlanStore.materialise(draftId, 1000L);
+    assertThat(plan.teaser()).containsEntry("title", "Plan");
+
+    // With step1 having planName
+    PlanStore.resetForTests();
+    StepStore.resetForTests();
+    StepStore.put(draftId, 1, Map.of("planName", "Algebra"), 1, 1000L);
+    plan = PlanStore.materialise(draftId, 2000L);
+    assertThat(plan.teaser()).containsEntry("title", "Algebra");
+
+    // With step1 having blank planName
+    PlanStore.resetForTests();
+    StepStore.resetForTests();
+    StepStore.put(draftId, 1, Map.of("planName", ""), 1, 1000L);
+    plan = PlanStore.materialise(draftId, 3000L);
+    assertThat(plan.teaser()).containsEntry("title", "Plan");
+  }
+
+  @Test
+  void planStoreDeriveProgressBranch() {
+    String draftId = "d1";
+    StepStore.put(draftId, 1, Map.of("planName", "T"), 1, 1000L);
+    // Add track tasks for fullFor to use
+    Map<String, Object> task1 = new LinkedHashMap<>();
+    task1.put("id", "t1");
+    task1.put("track", "math");
+    task1.put("level", "1");
+    task1.put("doing_verb", "Solve");
+    task1.put("title", "Equations");
+    task1.put("minutes", 30);
+    task1.put("done_criteria", "Done");
+    task1.put("planly_check", "Check");
+    task1.put("confidence", 5);
+    task1.put("miss_rule", "Rule");
+    task1.put("sprint", "S1");
+    StepStore.putTrackTask("math", "1", task1);
+
+    Map<String, Object> task2 = new LinkedHashMap<>();
+    task2.put("id", "t2");
+    task2.put("track", "math");
+    task2.put("level", "1");
+    task2.put("doing_verb", "Graph");
+    task2.put("title", "Functions");
+    task2.put("minutes", 30);
+    task2.put("done_criteria", "Done");
+    task2.put("planly_check", "Check");
+    task2.put("confidence", 5);
+    task2.put("miss_rule", "Rule");
+    task2.put("sprint", "S1");
+    StepStore.putTrackTask("math", "1", task2);
+
+    PlanStore.PlanRecord plan = PlanStore.materialise(draftId, 2000L);
+    Map<String, Object> progress = (Map<String, Object>) ((Map<?, ?>) plan.full().get("metrics")).get("progress");
+    assertThat(progress).containsKeys("done", "total");
+
+    // Add a completion delta
+    PlanStore.appendReadjustment(plan.id(), draftId, 1,
+        Map.of("taskId", "t1", "confidence", 4, "evidence", "Done"), "u1", "k1", "op1", 3000L);
+    plan = PlanStore.latest(draftId);
+    progress = (Map<String, Object>) ((Map<?, ?>) plan.full().get("metrics")).get("progress");
+    assertThat(progress.get("done")).isEqualTo(1);
+  }
+
+  @Test
+  void planStoreLatestAndVersionsBranch() {
+    String draftId = "d1";
+    PlanStore.resetForTests();
+    StepStore.resetForTests();
+    StepStore.put(draftId, 1, Map.of("planName", "T"), 1, 1000L);
+    PlanStore.PlanRecord v1 = PlanStore.materialise(draftId, 2000L);
+    PlanStore.PlanRecord v2 = PlanStore.appendReadjustment(v1.id(), draftId, 1,
+        Map.of("missedDate", "2026-01-01"), "u1", "k1", "op1", 3000L);
+
+    // latest() with multiple versions
+    assertThat(PlanStore.latest(draftId).version()).isEqualTo(2);
+    assertThat(PlanStore.latest("missing")).isNull();
+
+    // versions()
+    assertThat(PlanStore.versions(draftId)).containsExactlyInAnyOrder(1, 2);
+    assertThat(PlanStore.versions("missing")).isEmpty();
   }
 }
